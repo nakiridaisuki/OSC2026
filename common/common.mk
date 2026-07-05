@@ -39,3 +39,6 @@ $(TARGET).fit: kernel.bin
 
 clean:
 	rm -f *.o *.elf *.bin *.fit $(DTB_NAME) kernel.its
+
+run: kernel.bin
+	qemu-system-riscv64 -M virt -kernel kernel.bin -nographic
