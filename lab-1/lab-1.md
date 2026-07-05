@@ -51,7 +51,7 @@ Let's translate it into an executable file.
 In the preprocessing step, compilers handle preprocessing directives like `#include` or `#define`.
 Compilers will inject included files into the source file, and expand the macros.
 
-Using the `-E` option in `gcc` can get the preprocessed file.
+Using the `-E` option in `gcc` generates the preprocessed file.
 
 ```shell
 gcc -E hello.c -o hello.i
@@ -118,19 +118,19 @@ For example:
 
 #### 2. Compilation
 
-In compilation step, the real "compiler" will compile the preprocessed code into assembly code.
-Here we first compile it into x86-64 assembly code.
+In the compilation step, the real "compiler" will compile the preprocessed code into assembly code.
+Here, we first compile it into x86-64 assembly code.
 
-Using `-S` option in `gcc` can get the assembly code file.
+Using the `-S` option in `gcc` generates the assembly code file.
 
 ```shell
 gcc -S hello.i -o hello.s
 ```
 
-We don't talk about how to write the x86 assembly code,
-so only introduce the data section and function call here.
+We won't cover how to write the x86 assembly code,
+so we will only introduce the data section and function calls here.
 
-In the `hello.s` file, we focus on following lines:
+In the `hello.s` file, we focus on the following lines:
 
 ```asm
     .file "hello.c"
@@ -149,41 +149,41 @@ In the `hello.s` file, we focus on following lines:
 ...
 ```
 
-The command we care now are the `.rodata` and the function call.
-The `.rodata` switch to read only data section and store the two string literal,
-than switch back to text section to store following code.
+The directives we care about now are `.rodata` and the function call.
+The `.rodata` directive switches to the read only data section and store the two string literals,
+then switches back to the text section to store the subsequent code.
 
-The function `printf` doesn't in our assembly, it's in the c dynamic library `libc.so`,
-so here it uses the Procedure Linkage Table (PLT) to dynamic jump to it.
+The function `printf` is not defined in our assembly (it's in the C dynamic library `libc.so`)
+so it uses the Procedure Linkage Table (PLT) to dynamically jump to it.
 
 #### 3. Assembly
 
-In assembly step, the assembler will translate the assembly code further into machine code.
-Become pure binary, ELF format, relocatable object file, or simply, the `.o` files.
+In the assembly step, the assembler will translate the assembly code further into machine code.
+This results in a pure binary, ELF format, relocatable object file, or simply, the `.o` files.
 
-Using `-c` option in `gcc` can get the object file.
+Using the `-c` option in `gcc` generates the object file.
 
 ```shell
 gcc -c hello.s -o hello.o
 ```
 
-Now, the object file can't read by normal text editor without some plugins,
+Now, we can't read the object file in a normal text editor without some plugins,
 so we need some tools, like `readelf` on Linux, to play this file.
 
-As we know about ELF format file, there are some sections like `.text`, `.data` or `.bss`.
+As we know about the ELF format file, there are some sections like `.text`, `.data` or `.bss`.
 
 - `text` store your code, your logic.
 - `data` store initialized data in your code.
 - `bss` store uninitialized data in your code.
 - ... and some other sections
 
-We can use following command to observe these sections.
+We can use the following command to observe these sections.
 
 ```shell
 readelf -S hello.o
 ```
 
-The result look like this:
+The result looks like this:
 
 ```text
 $ readelf -S hello.o
@@ -227,24 +227,24 @@ Key to Flags:
   D (mbind), l (large), p (processor specific)
 ```
 
-I won't and I can't explain whole things here, so let me skip it.
-Beside the sections we know, there are tow other important section we need to talk about here.
+I can't explain everything in detail here, so let's skip some of the output.
+Besides the sections we know, there are two other important sections we need to focus on.
 
 1. Symbol Table Section: `.symtab`
 2. Relocation Section: `.rela.*`
 
 **Symbol Table**:
 
-Symbol is an abstraction of variables and functions in our code.
-Our variables and functions will become some blocks of machine code in the object file.
-We can consider the symbol point to the first line of that code block it represents.
+Symbols are abstraction of the variables and functions in our code.
+Our variables and functions will become some blocks of machine code or data in the object file.
+We can consider a symbol as pointing to the first line of the code block it represents.
 
-Symbol table records those symbols in our code.
-When we use multiple file to implement a function, we need a tool, Linker,
+The symbol table records these symbols in our code.
+When we use multiple files to implement a program, we need a tool, the **Linker**,
 to combine all code blocks into a single executable file.
-Linker relay on symbol table to complete its job.
+The linker relies on the symbol table to complete its job.
 
-Using following command can get symbol table in `.symtab` section from object file.
+Using the following command shows the symbol table in the `.symtab` section from the object file.
 
 ```text
 $ readelf -s hello.o
@@ -259,31 +259,32 @@ Symbol table '.symtab' contains 6 entries:
      5: 0000000000000000     0 NOTYPE  GLOBAL DEFAULT  UND printf
 ```
 
-We first see the `Ndx`. It tell us where this symbol come from.
-For example, the `main` symbol (our main function) come from section 1.
-By the section table above, we know the section 1 is `text`, so `main` symbol come from `text` section.
-In addition, the `Ndx` of `printf` symbol is `UND`, meaning undefined.
-We don't know where is the `printf` defined before linking since the function `printf` is included from `stdio.h`.
+We first look at `Ndx`. It tells us where these symbols come from.
+For example, the `main` symbol (our main function) comes from section 1.
+From the section table above, we know that section 1 is `text`, so the `main` symbol comes from the `text` section.
+In addition, the `Ndx` of the `printf` symbol is `UND`, meaning "undefined".
+We don't know where `printf` is defined before linking, since `stdio.h` only declares the function,
+and its actual implementation resides in the C library.
 
-Next important value is `Value`, it records symbol's offset in its section.
-Linker will combine all symbol in the same section, each symbol has its size.
-`Value` offset help us find the real symbol position in the final linked file.
+Another key field is the `Value`, which records the symbol's offset in its section.
+The linker will combine all symbols in the same section, and since each symbol has its size,
+this offset helps us find the real symbol position in the final linked file.
 
 **Relocation**:
 
-Recall the definition of ELF format:
+Recall the definition of the ELF format:
 
 - `text` section record machine code.
 - `data` section record initialized data.
 
-code in `text` section record the position of variables in `data` sections for accessing.
+Code in the `text` section records the address of variables in the `data` section for accessing.
 
-After linking, the position of variables in `data` section may differ
-since linker will combine all `data` section's variables into a single final `data` section.
-Therefore, we need to tell linker which variables' position need to be updated in `text` section.
-This is what relocation section records.
+After linking, the positions of variables in the `data` section may change
+since the linker will combine the variables from all `data` sections into a single, final `data` section.
+Therefore, we need to tell the linker which variable positions need to be updated in the `text` section.
+This is what the relocation section records.
 
-Using following command can get relocation data in `.rela.*` sections from the object file.
+Using the following command shows relocation data in the `.rela.*` sections from the object file.
 
 ```text
 $ readelf -r hello.o
@@ -299,10 +300,10 @@ Relocation section '.rela.eh_frame' at offset 0x1f0 contains 1 entry:
 000000000020  000200000002 R_X86_64_PC32     0000000000000000 .text + 0
 ```
 
-We focus on `.rela.text` section, there are three entries.
-First two entries is our string literal data `'OSC2026'` and `'Hello %s'` in `data` section.
+We focus on the `.rela.text` section, which contains three entries.
+The first two entries correspond to our string literal data `'OSC2026'` and `'Hello %s'` in the `rodata` section (read-only data, kind of `data`).
 The third entry is the `printf` function.
-Function call also need to jump to a specific position, so the position also need to be updated.
+Function calls also need to jump to a specific address, so this target location must be updated as well.
 
 #### 4. Linking
 
@@ -314,19 +315,19 @@ gcc hello.o -o hello
 gcc hello.o -o hello_static -static
 ```
 
-There are two way to link, Static and Dynamic.
+There are two ways to link: Static and Dynamic.
 
 **Static Linking**:
 
-Static linking generate a self contained executable file,
-which means we can execute this file without any dependences.
-It combine all needed code and data into it.
+Static linking generates a self-contained executable file,
+which means we can execute this file without any dependencies.
+It bundles all the necessary code and data into the executable.
 
 **Dynamic Linking**:
 
-Dynamic linking leave some functions, like `printf`, shared with many executable files outside,
+Dynamic linking leaves some functions, like `printf`, shared among multiple executables externally,
 and depends on some `.so` files to execute. Here, our `hello` depends on `libc.so`.
-We can use `ldd` tool to check it.
+We can use the `ldd` tool to check it.
 
 ```text
 $ ldd hello
@@ -335,8 +336,8 @@ $ ldd hello
     /lib64/ld-linux-x86-64.so.2 => /usr/lib64/ld-linux-x86-64.so.2 (0x00007fb1dcbf6000)
 ```
 
-Self contained doesn't free, the main purpose of dynamic linking is to reduce the size of executable file.
-We can see the difference size of two types of linking:
+Being self-contained isn't free. The main purpose of dynamic linking is to reduce the size of the executable.
+We can see the difference in size between the two types of linking:
 
 ```shell
 $ ll hello hello_static 
@@ -344,4 +345,74 @@ $ ll hello hello_static
 -rwxr-xr-x 1 nakiri users 824K Jul  3 22:35 hello_static*
 ```
 
-Dynamic linking _really_ reduce a lot of size.
+Dynamic linking **really** reduces the file size significantly.
+
+The linking has three main steps, section merging, symbol resolution and address allocation.
+
+**Section Merging**:
+
+As we said before, if we have multiple `.o` files,
+the linker needs to combine all sections in every object file into one section respectively.
+
+For example, using the following command tells linker to generate linking report.
+
+```shell
+gcc -Wl,-Map=output.map hello.o -o hello
+```
+
+Let's see following lines in `output.map`:
+
+```text
+.text           0x0000000000001040      0x122
+ *(.text.unlikely .text.*_unlikely .text.unlikely.*)
+ *(.text.exit .text.exit.*)
+ *(.text.startup .text.startup.*)
+ *(.text.hot .text.hot.*)
+ *(SORT_BY_NAME(.text.sorted.*))
+ *(.text .stub .text.* .gnu.linkonce.t.*)
+ .text          0x0000000000001040       0x26 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/Scrt1.o
+                0x0000000000001040                _start
+ .text          0x0000000000001066        0x0 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/crti.o
+ *fill*         0x0000000000001066        0xa 
+ .text          0x0000000000001070       0xc9 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/crtbeginS.o
+ .text          0x0000000000001139       0x29 hello.o
+                0x0000000000001139                main
+ .text          0x0000000000001162        0x0 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/crtendS.o
+ .text          0x0000000000001162        0x0 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/crtn.o
+ *(.gnu.warning)
+```
+
+We can see our final `text` section contains `text` sections from `Scrt1.o`, `crti.o`... and our `hello.o`.
+
+**Symbol Resolution**:
+
+After merge all sections, the linker will update the undefined symbols.
+If you have seen some error messages like `Undefined reference`, that means the linker can't find the definition after merging.
+Typically because you loss some object file to the linker.
+
+Our `printf` function is undefined before linking.
+Let's check if it's defined in static linked executable.
+
+Using the following command to find `printf` definition:
+
+```shell
+$ readelf -s hello_static | grep printf
+
+...
+   822: 000000000043aac0   257 FUNC    GLOBAL HIDDEN     5 __printf_buffer_[...]
+   824: 0000000000406150   199 FUNC    GLOBAL DEFAULT    5 __printf
+   841: 0000000000406150   199 FUNC    GLOBAL DEFAULT    5 printf
+   843: 00000000004384f0   195 FUNC    GLOBAL HIDDEN     5 __printf_buffer_write
+   855: 000000000043da40    59 FUNC    GLOBAL HIDDEN     5 __printf_buffer_[...]
+...
+```
+
+We can see our `printf` has its definition now.
+
+**Address Allocation**:
+
+After find all needed sections and merge them, we need to decide the address of these sections.
+We have seen the linking report in `output.map`, the address `0x00....1040` and other things are the final address of the sections.
+
+Once the address has been given, linker can relocate all variables and function calls in the text section,
+and generate the final executable file we need.
