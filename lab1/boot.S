@@ -19,5 +19,6 @@ bss_cleaned:
     call main
 
 loop_forever:
+    wfi
     j loop_forever
 
