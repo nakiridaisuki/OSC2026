@@ -1,6 +1,8 @@
 # DisableFormat: true
 BasedOnStyle: LLVM
 
+ColumnLimit: 0
+
 # TabWidth (unsigned)
 # The number of columns used for tab stops.
 TabWidth: 4
@@ -34,3 +36,8 @@ BreakBinaryOperations: RespectPrecedence
 PackConstructorInitializers: NextLine
 
 AlignConsecutiveAssignments: true
+
+AlignConsecutiveMacros:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false

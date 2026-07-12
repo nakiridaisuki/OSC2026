@@ -9,36 +9,45 @@ OBJCOPY := $(PREFIX)objcopy
 MKIMAGE := mkimage
 
 COMMON_DIR := ../common
+OBJ_DIR    := ./build
 DTB        := $(COMMON_DIR)/$(DTB_NAME)
 ITS        := $(COMMON_DIR)/kernel.its
 
+CFLAGS  := -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude
 LDFLAGS := -T linker.ld
+
+vpath %.c . src
+vpath %.S . src
+vpath %.s . src
+
+REAL_OBJS := $(addprefix $(OBJ_DIR)/, $(OBJS))
 
 all: $(TARGET).fit
 
-%.o: %.s
-	$(CC) -c $< -o $@
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
 
-%.o: %.S
-	$(CC) -c $< -o $@
+$(OBJ_DIR)/%.o: %.s | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.c
-	$(CC) -c $< -o $@
+$(OBJ_DIR)/%.o: %.S | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TARGET).elf: $(OBJS) linker.ld
-	$(LD) $(LDFLAGS) -o $@ $(OBJS)
+$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
 
-kernel.bin: $(TARGET).elf
+$(OBJ_DIR)/$(TARGET).elf: $(REAL_OBJS) linker.ld | $(OBJ_DIR)
+	$(LD) $(LDFLAGS) -o $@ $(REAL_OBJS)
+
+$(OBJ_DIR)/kernel.bin: $(OBJ_DIR)/$(TARGET).elf | $(OBJ_DIR)
 	$(OBJCOPY) -O binary $< $@
 
-$(TARGET).fit: kernel.bin
-	cp $(DTB) .
-	cp $(ITS) .
-	$(MKIMAGE) -f kernel.its $@
-	rm -f $(DTB_NAME) kernel.its
+$(TARGET).fit: $(OBJ_DIR)/kernel.bin
+	$(MKIMAGE) -f $(ITS) -D "-i $(COMMON_DIR) -i $(OBJ_DIR)" $@
 
 clean:
-	rm -f *.o *.elf *.bin *.fit $(DTB_NAME) kernel.its
+	rm -rf $(OBJ_DIR)
+	rm *.fit
 
 run: kernel.bin
 	qemu-system-riscv64 -M virt -kernel kernel.bin -nographic

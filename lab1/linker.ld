@@ -1,5 +1,5 @@
 OUTPUT_ARCH( "riscv" )
-ENTRY( _start )
+ENTRY( _start ) /* Set the entry point */
 
 SECTIONS
 {
@@ -7,7 +7,7 @@ SECTIONS
     . = 0x80200000;
 
     .text : { 
-        *(.text.entry) /* put entry opint to the front */
+        *(.text.entry) /* put entry point to the beginning */
         *(.text)
     }
 
