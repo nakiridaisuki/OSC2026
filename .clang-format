@@ -1,7 +1,7 @@
 # DisableFormat: true
 BasedOnStyle: LLVM
 
-ColumnLimit: 0
+ColumnLimit: 100
 
 # TabWidth (unsigned)
 # The number of columns used for tab stops.

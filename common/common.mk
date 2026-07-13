@@ -49,5 +49,5 @@ clean:
 	rm -rf $(OBJ_DIR)
 	rm *.fit
 
-run: kernel.bin
-	qemu-system-riscv64 -M virt -kernel kernel.bin -nographic
+run: $(OBJ_DIR)/kernel.elf
+	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/kernel.elf -nographic
