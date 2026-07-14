@@ -51,7 +51,7 @@ int main() {
             printf("  implementation version: 0x%016lx\n", impl_ver.value);
         } else if (strlen(buf) > 0) {
             printf("Unknow command: ");
-            printf(buf);
+            printf("%s", buf);
             printf("\n");
         }
     }

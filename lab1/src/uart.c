@@ -16,6 +16,7 @@ void uart_init(unsigned int baudrate) {
     write_reg(UART_LCR, read_reg(UART_LCR) | 0x80);
     write_reg(UART_DLL, dll);
     write_reg(UART_DLH, dlh);
+    // Setting 8N1 data format
     write_reg(UART_LCR, 0x03);
 }
 
