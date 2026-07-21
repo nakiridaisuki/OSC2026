@@ -1,0 +1,7 @@
+TARGET := bootloader
+
+OBJ_DIR := ./build/$(TARGET)
+LINKER  := linker.$(TARGET).ld
+OBJS    := main.o boot.o string.o uart.o printf.o sbi.o
+
+include ../common/common.mk

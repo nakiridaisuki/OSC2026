@@ -1,0 +1,10 @@
+#ifndef _STRING_H_
+#define _STRING_H_
+
+#include <stddef.h>
+
+void *memset(void *dst, int c, size_t n);
+size_t strlen(const char *s);
+int strcmp(const char *s1, const char *s2);
+
+#endif // _STRING_H_

@@ -1,5 +1,6 @@
 TARGET   ?= kernel
 OBJS     ?= main.o
+LINKER   ?= linker.ld
 DTB_NAME := x1_orangepi-rv2.dtb
 
 PREFIX  ?= riscv64-unknown-elf-
@@ -9,12 +10,12 @@ OBJCOPY := $(PREFIX)objcopy
 MKIMAGE := mkimage
 
 COMMON_DIR := ../common
-OBJ_DIR    := ./build
+OBJ_DIR    ?= ./build
 DTB        := $(COMMON_DIR)/$(DTB_NAME)
 ITS        := $(COMMON_DIR)/kernel.its
 
 CFLAGS  := -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude
-LDFLAGS := -T linker.ld
+LDFLAGS := -T $(LINKER)
 
 vpath %.c . src
 vpath %.S . src
@@ -36,7 +37,7 @@ $(OBJ_DIR)/%.o: %.S | $(OBJ_DIR)
 $(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(OBJ_DIR)/$(TARGET).elf: $(REAL_OBJS) linker.ld | $(OBJ_DIR)
+$(OBJ_DIR)/$(TARGET).elf: $(REAL_OBJS) $(LINKER) | $(OBJ_DIR)
 	$(LD) $(LDFLAGS) -o $@ $(REAL_OBJS)
 
 $(OBJ_DIR)/kernel.bin: $(OBJ_DIR)/$(TARGET).elf | $(OBJ_DIR)
