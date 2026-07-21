@@ -1,6 +1,8 @@
 #ifndef _UART_H_
 #define _UART_H_
 
+#include <stdbool.h>
+
 // UART base info
 #define UART_CLK  14750000
 #define UART_BASE 0xd4017000
@@ -26,9 +28,9 @@
 // Macro for printf
 #define _putchar uart_putchar
 
-void uart_init(unsigned int baudrate);
+void uart_init(unsigned int baudrate, bool enable_fifo);
 void uart_putchar(char c);
 char uart_getchar();
-void uart_puts(const char *str);
+int uart_getuint32();
 
 #endif // !_UART_H_

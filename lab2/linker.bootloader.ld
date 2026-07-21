@@ -4,7 +4,8 @@ ENTRY( _start ) /* Set the entry point */
 SECTIONS
 {
     /* Starting address */
-    . = 0x80200000;
+    . = 0x20000000;
+    _start_address = .;
 
     .text : { 
         *(.text.entry) /* put entry point to the beginning */
@@ -37,4 +38,6 @@ SECTIONS
 
     . = ALIGN(16);
     _stack_top = .;
+
+    _end_address = .;
 }

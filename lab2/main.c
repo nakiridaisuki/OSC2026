@@ -2,9 +2,10 @@
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
+#include <stdbool.h>
 
 int main() {
-    uart_init(115200);
+    uart_init(115200, false);
 
     char buf[256];
 

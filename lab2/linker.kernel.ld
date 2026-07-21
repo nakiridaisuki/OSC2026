@@ -4,7 +4,7 @@ ENTRY( _start ) /* Set the entry point */
 SECTIONS
 {
     /* Starting address */
-    . = 0x80200000;
+    . = 0x00200000;
 
     .text : { 
         *(.text.entry) /* put entry point to the beginning */
