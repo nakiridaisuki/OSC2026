@@ -53,6 +53,8 @@ int main() {
             printf("  OpenSBI specification version: 0x%016lx\n", spec_ver.value);
             printf("  implementation ID: 0x%016lx\n", impl_id.value);
             printf("  implementation version: 0x%016lx\n", impl_ver.value);
+
+            check_extensions();
         } else if (strlen(buf) > 0) {
             printf("Unknow command: ");
             printf("%s", buf);

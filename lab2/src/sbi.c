@@ -1,14 +1,17 @@
 #include "sbi.h"
+#include "printf.h"
+#include "string.h"
+#include <stddef.h>
 
 struct sbiret sbi_ecall(
-    int ext,
-    int fid,
-    unsigned int arg0,
-    unsigned int arg1,
-    unsigned int arg2,
-    unsigned int arg3,
-    unsigned int arg4,
-    unsigned int arg5
+    unsigned long ext,
+    unsigned long fid,
+    unsigned long arg0,
+    unsigned long arg1,
+    unsigned long arg2,
+    unsigned long arg3,
+    unsigned long arg4,
+    unsigned long arg5
 ) {
     register unsigned long a0 asm("a0") = arg0;
     register unsigned long a1 asm("a1") = arg1;
@@ -29,15 +32,38 @@ struct sbiret sbi_ecall(
     ret.value = a1;
     return ret;
 }
-struct sbiret sbi_get_spec_version(void) {
-    return sbi_ecall(SBI_EXT_BASE, SBI_BASE_GET_SPEC_VERSION, 0, 0, 0, 0, 0, 0);
+
+// Auto generate base extension function implementation
+#define X(fid, name_const, func_name)                                                              \
+    struct sbiret func_name(void) { return sbi_ecall(SBI_EXT_BASE, fid, 0, 0, 0, 0, 0, 0); }
+BASE_FID_LIST
+#undef X
+struct sbiret sbi_probe_extension(long eid) {
+    return sbi_ecall(SBI_EXT_BASE, BASE_PROBE_EXTENSION, eid, 0, 0, 0, 0, 0);
 }
-struct sbiret sbi_get_impl_id(void) {
-    return sbi_ecall(SBI_EXT_BASE, SBI_BASE_GET_IMPL_ID, 0, 0, 0, 0, 0, 0);
-}
-struct sbiret sbi_get_impl_version(void) {
-    return sbi_ecall(SBI_EXT_BASE, SBI_BASE_GET_IMPL_VERSION, 0, 0, 0, 0, 0, 0);
-}
+
 struct sbiret sbi_warm_reboot(void) {
-    return sbi_ecall(SBI_EXT_SRST, SBI_SRST_SYSTEM_RESET, 2, 0, 0, 0, 0, 0);
+    return sbi_ecall(SBI_EXT_SRST, SRST_SYSTEM_RESET, 2, 0, 0, 0, 0, 0);
+}
+
+///////////////////////// Utils Functions /////////////////////////
+
+void check_extensions() {
+    struct Ext {
+        unsigned long eid;
+        const char *ename;
+    };
+
+    static const struct Ext ext_list[] = {
+#define X(eid, name_const, name_str) {eid, name_str},
+        SBI_EXT_LIST
+#undef X
+    };
+
+    size_t num_exts = sizeof(ext_list) / sizeof(ext_list[0]);
+
+    for (size_t i = 0; i < num_exts; i++) {
+        long result = sbi_probe_extension(ext_list[i].eid).value;
+        printf("%s: %s\n", ext_list[i].ename, result ? "Supported" : "Unsupported");
+    }
 }

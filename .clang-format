@@ -41,3 +41,5 @@ AlignConsecutiveMacros:
   Enabled: true
   AcrossEmptyLines: false
   AcrossComments: false
+
+AlignEscapedNewlines: Left
