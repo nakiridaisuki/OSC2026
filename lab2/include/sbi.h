@@ -1,19 +1,20 @@
 #ifndef _SBI_H_
 #define _SBI_H_
 
-#define SBI_EXT_LIST                                                  \
-    X(0x10, SBI_EXT_BASE, "Base Extension")                           \
-    X(0x54494D45, SBI_EXT_TIME, "Timer Extension")                    \
-    X(0x735049, SBI_EXT_IPI, "IPI Extension")                         \
-    X(0x52464E43, SBI_EXT_RFENCE, "RFENCE Extension")                 \
-    X(0x48534D, SBI_EXT_HSM, "Hart State Management Extension")       \
-    X(0x53525354, SBI_EXT_SRST, "System Reset Extension")             \
-    X(0x504D55, SBI_EXT_PMU, "Performance Monitoring Unit Extension") \
-    X(0x4442434E, SBI_EXT_DBCN, "Debug Console Extension")            \
-    X(0x53555350, SBI_EXT_SUSP, "System Suspend Extension")           \
-    X(0x43505043, SBI_EXT_CPPC, "CPPC Extension")                     \
-    X(0x4E41434C, SBI_EXT_NACL, "Nested Acceleration Extension")      \
-    X(0x535441, SBI_EXT_STA, "Steal-time Accounting Extension")
+// X(EID, name, description)
+#define SBI_EXT_LIST                                                    \
+    X(0x00000010, SBI_EXT_BASE, "Base Extension")                       \
+    X(0x54494D45, SBI_EXT_TIME, "Timer Extension")                      \
+    X(0x00735049, SBI_EXT_SIPI, "IPI Extension")                        \
+    X(0x52464E43, SBI_EXT_RFNC, "RFENCE Extension")                     \
+    X(0x0048534D, SBI_EXT_HSM, "Hart State Management Extension")       \
+    X(0x53525354, SBI_EXT_SRST, "System Reset Extension")               \
+    X(0x00504D55, SBI_EXT_PMU, "Performance Monitoring Unit Extension") \
+    X(0x4442434E, SBI_EXT_DBCN, "Debug Console Extension")              \
+    X(0x53555350, SBI_EXT_SUSP, "System Suspend Extension")             \
+    X(0x43505043, SBI_EXT_CPPC, "CPPC Extension")                       \
+    X(0x4E41434C, SBI_EXT_NACL, "Nested Acceleration Extension")        \
+    X(0x00535441, SBI_EXT_STA, "Steal-time Accounting Extension")
 
 enum {
 #define X(eid, name_const, name_str) name_const = eid,

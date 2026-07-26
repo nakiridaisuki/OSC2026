@@ -32,3 +32,10 @@ size_t strlen(const char *s) {
         len++;
     return len;
 }
+
+void strcpy(char *dst, const char *src) {
+    while (*src != 0) {
+        *dst++ = *src++;
+    }
+    *dst = 0;
+}

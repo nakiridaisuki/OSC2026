@@ -1,11 +1,19 @@
+#include "dtb.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
 #include <stdbool.h>
+#include <stdint.h>
 
-int main() {
+int main(unsigned long hartid, const uint8_t *dtb_ptr) {
     uart_init(115200, false);
+
+    printf("\n=========================================\n");
+    printf("Kernel start successfully!\n");
+    printf("######## Device Tree Info ########\n");
+    dtb_parsing(dtb_ptr);
+    printf("=========================================\n\n");
 
     char buf[256];
 
