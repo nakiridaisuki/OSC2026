@@ -2,10 +2,11 @@
 #define _UART_H_
 
 #include <stdbool.h>
+#include <stdint.h>
 
 // UART base info
-#define UART_CLK  14750000
-#define UART_BASE 0xd4017000
+#define UART_CLK 14750000
+extern uint64_t UART_BASE;
 
 // Register offsets
 #define UART_RBR 0x00 // Receive Buffer
@@ -28,7 +29,7 @@
 // Macro for printf
 #define _putchar uart_putchar
 
-void uart_init(unsigned int baudrate, bool enable_fifo);
+void uart_init(uint64_t base_address, unsigned int baudrate, bool enable_fifo);
 void uart_putchar(char c);
 char uart_getchar();
 int uart_getuint32();

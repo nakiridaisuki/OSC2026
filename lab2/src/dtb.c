@@ -1,66 +1,199 @@
 #include "dtb.h"
-#include "printf.h"
+#include "string.h"
 #include "utils.h"
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
-void align_4(size_t *addr) { *addr += (4 - *addr % 4) % 4; }
+#include "printf.h"
+// #include <stdio.h>
 
-void dtb_parsing(const uint8_t *dtb_ptr) {
-    struct fdt_header header;
-#define X(field_name, idx) header.field_name = BE_uint32(dtb_ptr + idx * 4);
+void _align_4(const uint8_t **addr_ptr) {
+    *addr_ptr = (const uint8_t *)(((uint64_t)*addr_ptr + 3) & ~3);
+}
+
+uint32_t _get_u32_with_off(const uint8_t **addr_ptr) {
+    if (addr_ptr == NULL || *addr_ptr == NULL)
+        return 0;
+
+    uint32_t result = BE_uint32((const uint8_t *)*addr_ptr);
+    *addr_ptr += sizeof(uint32_t);
+    return result;
+}
+
+int _node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
+    if (strncmp(node_name, seg, seg_len) != 0)
+        return 0;
+
+    char next_char = node_name[seg_len];
+    return next_char == '\0' || next_char == '@';
+}
+
+struct FDTHeader get_fdt_header(const uint8_t *fdt_ptr) {
+    struct FDTHeader header;
+#define X(field_name, idx) header.field_name = BE_uint32(fdt_ptr + idx * 4);
     FDT_HEADER_FIELDS
 #undef X
 
-#define X(field_name, idx) printf("Field %s is: 0x%x\n", #field_name, header.field_name);
-    FDT_HEADER_FIELDS
-#undef X
+    return header;
+}
 
-    const uint8_t *dt_struct_ptr  = dtb_ptr + header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = dtb_ptr + header.off_dt_strings;
+FDTEvent fdt_next(FDTIterator *iter) {
+    while (1) {
+        iter->event_start = iter->cursor;
 
-    while (BE_uint32(dt_struct_ptr) != FDT_END) {
-        uint32_t token = BE_uint32(dt_struct_ptr);
-        dt_struct_ptr += sizeof(uint32_t);
-        if (token == FDT_NOP) {
+        uint32_t token = _get_u32_with_off(&iter->cursor);
+
+        if (token == FDT_END)
+            return FDT_END;
+        if (token == FDT_NOP)
             continue;
-        }
 
         if (token == FDT_BEGIN_NODE) {
-            // Get node name
-            char node_name[32];
-            strcpy(node_name, (const char *)dt_struct_ptr);
-            dt_struct_ptr += strlen(node_name);
-            align_4((size_t *)&dt_struct_ptr);
-            printf("##### Parsing node: %s\n", node_name);
+            const char *node_name = (const char *)iter->cursor;
+            iter->cursor += strlen(node_name) + 1;
+            _align_4(&iter->cursor);
 
-            // Get node properties
-            while (BE_uint32(dt_struct_ptr) != FDT_BEGIN_NODE) {
-                uint32_t token = BE_uint32(dt_struct_ptr);
-                dt_struct_ptr += sizeof(uint32_t);
-                if (token == FDT_NOP)
-                    continue;
-                if (token == FDT_END_NODE)
-                    break;
+            iter->name = node_name;
+            iter->depth++;
 
-                if (token == FDT_PROP) {
-                    printf("Find a property\n");
-                    struct fdt_prop prop;
-                    prop.len = BE_uint32(dt_struct_ptr);
-                    dt_struct_ptr += 4;
-                    prop.nameoff = BE_uint32(dt_struct_ptr);
-                    dt_struct_ptr += 4;
+            return FDT_BEGIN_NODE;
+        }
+        if (token == FDT_END_NODE) {
+            iter->depth--;
+            return FDT_END_NODE;
+        }
+        if (token == FDT_PROP) {
+            iter->len     = _get_u32_with_off(&iter->cursor);
+            iter->nameoff = _get_u32_with_off(&iter->cursor);
 
-                    char prop_name[32];
-                    strcpy(prop_name, (const char *)(dt_strings_ptr + prop.nameoff));
-                    printf("Property len: %d\n", prop.len);
-                    printf("Property name: %s\n", prop_name);
+            iter->val = iter->cursor;
+            iter->cursor += iter->len;
+            _align_4(&iter->cursor);
 
-                    dt_struct_ptr += prop.len;
-                    align_4((size_t *)&dt_struct_ptr);
-                }
+            if (iter->strings != NULL)
+                iter->name = (const char *)(iter->strings + iter->nameoff);
+            return FDT_PROP;
+        }
+    }
+}
+
+const uint8_t *
+fdt_find_node(const uint8_t *dt_struct_ptr, const char *target_name, size_t target_len) {
+    FDTIterator iter = {dt_struct_ptr, NULL, 0};
+    FDTEvent ev;
+    while ((ev = fdt_next(&iter)) != FDT_END) {
+        if (ev == FDT_BEGIN_NODE) {
+            if (target_len == 0) {
+                if (iter.depth == 1 && iter.name[0] == '\0')
+                    return iter.event_start;
+            } else {
+                if (iter.depth == 2 && _node_name_eq(iter.name, target_name, target_len))
+                    return iter.event_start;
             }
+        }
+        if (ev == FDT_END_NODE) {
+            if (iter.depth <= 0)
+                break;
+            continue;
+        }
+    }
+    return NULL;
+}
+FDTProp
+fdt_find_prop(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt, const char *prop_name) {
+    FDTProp result   = {0, NULL, "", NULL};
+    FDTIterator iter = {dt_struct_ptr, dt_strings_prt, 0};
+    FDTEvent ev;
+    while ((ev = fdt_next(&iter)) != FDT_END) {
+        if (ev == FDT_END_NODE) {
+            if (iter.depth <= 0)
+                break;
+            continue;
+        }
+        if (ev == FDT_PROP) {
+            if (iter.depth == 1 && strcmp(prop_name, iter.name) == 0) {
+                result.len      = iter.len;
+                result.prop_ptr = iter.event_start;
+                result.name_ptr = iter.name;
+                result.val_ptr  = iter.val;
+                return result;
+            }
+        }
+    }
+    return result;
+}
+
+const uint8_t *fdt_find_node_by_path(const uint8_t *dt_struct_ptr, const char *path) {
+    path += 1;
+    while (*path) {
+        const char *next_slash = strchr(path, '/');
+        size_t seg_len         = next_slash ? next_slash - path : strlen(path);
+
+        if (seg_len > 0) {
+            dt_struct_ptr = fdt_find_node(dt_struct_ptr, path, seg_len);
+            if (dt_struct_ptr == NULL) {
+                return NULL;
+            }
+        }
+
+        if (next_slash == NULL) {
+            break;
+        }
+        path = next_slash + 1;
+    }
+    return dt_struct_ptr;
+}
+
+FDTProp fdt_find_prop_by_name(
+    const uint8_t *dt_struct_ptr,
+    const uint8_t *dt_strings_prt,
+    const char *node_name,
+    const char *prop_name
+) {
+    dt_struct_ptr = fdt_find_node(dt_struct_ptr, node_name, strlen(node_name));
+    return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
+}
+FDTProp fdt_find_prop_by_path(
+    const uint8_t *dt_struct_ptr,
+    const uint8_t *dt_strings_prt,
+    const char *path,
+    const char *prop_name
+) {
+    dt_struct_ptr = fdt_find_node_by_path(dt_struct_ptr, path);
+    return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
+}
+
+void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt) {
+    FDTIterator iter = {dt_struct_ptr, dt_strings_prt, 0};
+    FDTEvent ev;
+    while ((ev = fdt_next(&iter)) != FDT_END) {
+        if (ev == FDT_END_NODE) {
+            if (iter.depth <= 0)
+                break;
+            continue;
+        }
+        if (ev == FDT_PROP) {
+            if (iter.depth == 1)
+                printf("Property: %s\n", iter.name);
+        }
+    }
+}
+void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr) {
+    FDTIterator iter = {dt_struct_ptr, NULL, 0};
+    FDTEvent ev;
+    while ((ev = fdt_next(&iter)) != FDT_END) {
+        if (ev == FDT_BEGIN_NODE) {
+            if (iter.depth == 1) {
+                printf("Node: <%s>\n", iter.name);
+            }
+            if (iter.depth == 2) {
+                printf("SubNode: %s\n", iter.name);
+            }
+        }
+        if (ev == FDT_END_NODE) {
+            if (iter.depth == 0)
+                break;
+            continue;
         }
     }
 }

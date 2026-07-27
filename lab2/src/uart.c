@@ -1,6 +1,10 @@
 #include "uart.h"
 
-void uart_init(unsigned int baudrate, bool enable_fifo) {
+uint64_t UART_BASE;
+
+void uart_init(uint64_t base_address, unsigned int baudrate, bool enable_fifo) {
+    UART_BASE = base_address;
+
     unsigned int divisor = (UART_CLK + (baudrate * 8)) / (baudrate * 16);
     unsigned char dll    = divisor & 0xff;
     unsigned char dlh    = (divisor >> 8) & 0xff;
