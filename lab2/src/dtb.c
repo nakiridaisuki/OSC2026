@@ -1,11 +1,9 @@
 #include "dtb.h"
+#include "printf.h"
 #include "string.h"
 #include "utils.h"
 #include <stddef.h>
 #include <stdint.h>
-
-#include "printf.h"
-// #include <stdio.h>
 
 void _align_4(const uint8_t **addr_ptr) {
     *addr_ptr = (const uint8_t *)(((uint64_t)*addr_ptr + 3) & ~3);
@@ -28,8 +26,8 @@ int _node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
     return next_char == '\0' || next_char == '@';
 }
 
-struct FDTHeader get_fdt_header(const uint8_t *fdt_ptr) {
-    struct FDTHeader header;
+FDTHeader get_fdt_header(const uint8_t *fdt_ptr) {
+    FDTHeader header;
 #define X(field_name, idx) header.field_name = BE_uint32(fdt_ptr + idx * 4);
     FDT_HEADER_FIELDS
 #undef X

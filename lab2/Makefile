@@ -8,11 +8,11 @@ bootloader:
 kernel:
 	make -f Makefile.kernel
 
+qemu:
+	make -f Makefile.qemu run
+
 test:
 	make -f Makefile.test
-
-run:
-	make run -f Makefile.kernel
 
 clean:
 	rm -rf build

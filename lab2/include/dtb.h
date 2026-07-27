@@ -48,13 +48,13 @@ typedef struct {
     uint32_t nameoff;
 } FDTIterator;
 
-struct FDTHeader {
+typedef struct {
 #define X(field_name, idx) uint32_t field_name;
     FDT_HEADER_FIELDS
 #undef X
-};
+} FDTHeader;
 
-struct FDTHeader get_fdt_header(const uint8_t *fdt_ptr);
+FDTHeader get_fdt_header(const uint8_t *fdt_ptr);
 
 const uint8_t *
 fdt_find_node(const uint8_t *dt_struct_ptr, const char *node_name, size_t target_len);

@@ -34,7 +34,7 @@ struct sbiret sbi_ecall(
 }
 
 // Auto generate base extension function implementation
-#define X(fid, name_const, func_name)                                                              \
+#define X(fid, name_const, func_name) \
     struct sbiret func_name(void) { return sbi_ecall(SBI_EXT_BASE, fid, 0, 0, 0, 0, 0, 0); }
 BASE_FID_LIST
 #undef X
@@ -65,5 +65,12 @@ void check_extensions() {
     for (size_t i = 0; i < num_exts; i++) {
         long result = sbi_probe_extension(ext_list[i].eid).value;
         printf("%s: %s\n", ext_list[i].ename, result ? "Supported" : "Unsupported");
+    }
+}
+
+void sbi_putchar(char ch) { sbi_ecall(1, 0, ch, 0, 0, 0, 0, 0); }
+void sbi_puts(char *str) {
+    while (*str) {
+        sbi_putchar(*str++);
     }
 }

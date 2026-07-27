@@ -28,7 +28,7 @@ void waiting_magic_num() {
 }
 
 void main(unsigned long hartid, const uint8_t *dtb_ptr) {
-    uart_init(0xd4017000, 115200, true);
+    uart_init(14750000, 0xd4017000, 2, 115200, true);
 
     unsigned long current_pc;
     asm volatile("auipc %0, 0" : "=r"(current_pc));

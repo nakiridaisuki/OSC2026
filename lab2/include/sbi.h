@@ -68,5 +68,7 @@ struct sbiret sbi_warm_reboot(void);
 ///////////////////////// Utils Functions /////////////////////////
 
 void check_extensions();
+void sbi_putchar(char ch);
+void sbi_puts(char *str);
 
 #endif // !_SBI_H_

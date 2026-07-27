@@ -5,31 +5,35 @@
 #include <stdint.h>
 
 // UART base info
-#define UART_CLK 14750000
+extern uint64_t UART_CLK;
 extern uint64_t UART_BASE;
+extern uint32_t UART_REG_SHIFT;
 
-// Register offsets
-#define UART_RBR 0x00 // Receive Buffer
-#define UART_THR 0x00 // Transmit Holding
-#define UART_IER 0x04 // Interrupt Enable
-#define UART_LSR 0x14 // Line Status
-#define UART_FCR 0x08 // FIFO Control
-#define UART_LCR 0x0c // Line Control
-#define UART_DLL 0x00 // Divisor Latch Low Byte
-#define UART_DLH 0x04 // Divisor Latch High Byte
+// Standard 16550 UART register logic index
+#define UART_RBR 0 // Receive Buffer
+#define UART_THR 0 // Transmit Holding
+#define UART_IER 1 // Interrupt Enable
+#define UART_FCR 2 // FIFO Control
+#define UART_LCR 3 // Line Control
+#define UART_LSR 5 // Line Status
+#define UART_DLL 0 // Divisor Latch Low Byte
+#define UART_DLH 1 // Divisor Latch High Byte
 
 // Register bits
 #define LSR_TDRQ 0x20 // Transmit Data Request
 #define LSR_DR   0x01 // Data Ready
 
 // Utils functions
-#define write_reg(offset, val) (*(volatile unsigned int *)(UART_BASE + offset) = val)
-#define read_reg(offset)       (*(volatile unsigned int *)(UART_BASE + offset))
+#define write_reg(offset, val) \
+    (*(volatile uint8_t *)(UART_BASE + (offset << UART_REG_SHIFT)) = (uint8_t)val)
+#define read_reg(offset) (*(volatile uint8_t *)(UART_BASE + (offset << UART_REG_SHIFT)))
 
 // Macro for printf
 #define _putchar uart_putchar
 
-void uart_init(uint64_t base_address, unsigned int baudrate, bool enable_fifo);
+void uart_init(
+    uint64_t clock, uint64_t base_address, uint32_t reg_shift, uint32_t baudrate, bool enable_fifo
+);
 void uart_putchar(char c);
 char uart_getchar();
 int uart_getuint32();
