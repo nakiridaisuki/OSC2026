@@ -1,5 +1,5 @@
 TARGET := test
-OBJS   := test.o dtb.o utils.o
+OBJS   := test.o string.o
 
 PREFIX :=
 CC     := $(PREFIX)gcc

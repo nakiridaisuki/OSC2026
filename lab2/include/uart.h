@@ -1,6 +1,7 @@
 #ifndef _UART_H_
 #define _UART_H_
 
+#include "types.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -31,9 +32,24 @@ extern uint32_t UART_REG_SHIFT;
 // Macro for printf
 #define _putchar uart_putchar
 
-void uart_init(
-    uint64_t clock, uint64_t base_address, uint32_t reg_shift, uint32_t baudrate, bool enable_fifo
-);
+typedef struct {
+    phys_addr_t base_addr;
+    uint32_t clock;
+    uint32_t reg_shift;
+    uint32_t baudrate;
+    uint8_t parity;
+    uint8_t bits;
+    uint8_t enable_flow_ctrl;
+    uint8_t enable_fifo;
+} UARTInit;
+
+enum {
+    PARITY_NO   = 0,
+    PARITY_ODD  = 1,
+    PARITY_EVEN = 2,
+};
+
+void uart_init(UARTInit init_data);
 void uart_putchar(char c);
 char uart_getchar();
 int uart_getuint32();

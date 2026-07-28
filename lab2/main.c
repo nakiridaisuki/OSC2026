@@ -3,50 +3,30 @@
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
-#include "utils.h"
 #include <stdbool.h>
 #include <stdint.h>
 
 int main(unsigned long hartid, const uint8_t *dtb_ptr) {
-    FDTHeader fdt_header          = get_fdt_header(dtb_ptr);
-    const uint8_t *dt_struct_ptr  = dtb_ptr + fdt_header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = dtb_ptr + fdt_header.off_dt_strings;
-    FDTProp serial0 = fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/aliases", "serial0");
 
-    const char *uart_path = (const char *)serial0.val_ptr;
-    FDTProp uart0_reg     = fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, uart_path, "reg");
-    uint64_t uart_base    = BE_uint64(uart0_reg.val_ptr);
-    FDTProp uart0_reg_shift =
-        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, uart_path, "reg-shift");
-    uint32_t uart_reg_shift = BE_uint32(uart0_reg_shift.val_ptr);
-    FDTProp uart0_clock =
-        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, uart_path, "clock-frequency");
-    if (uart0_clock.val_ptr == NULL) {
-        uart0_clock = fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, uart_path, "clk-fpga");
-    }
-    uint32_t uart_clock = BE_uint32(uart0_clock.val_ptr);
+    UARTInit uart_init_data = fdt_get_uart_info(dtb_ptr);
 
     char buf[256];
     snprintf(
         buf,
         sizeof(buf),
         "System initialized. \nUART base address is: 0x%016llx\n",
-        (unsigned long long)uart_base
+        (unsigned long long)uart_init_data.base_addr
     );
     sbi_puts(buf);
-    snprintf(buf, sizeof(buf), "UART clock is: %d\n", (unsigned long long)uart_clock);
+    snprintf(buf, sizeof(buf), "UART clock is: %d\n", (unsigned long long)uart_init_data.clock);
     sbi_puts(buf);
-    snprintf(buf, sizeof(buf), "UART reg shift is: %d\n", (unsigned long long)uart_reg_shift);
+    snprintf(
+        buf, sizeof(buf), "UART reg shift is: %d\n", (unsigned long long)uart_init_data.reg_shift
+    );
     sbi_puts(buf);
-    uart_init(uart_clock, uart_base, uart_reg_shift, 115200, false);
 
-    printf("\n=========================================\n");
-    printf("Kernel start successfully!\n");
-    printf("######## Device Tree Info ########\n");
-#define X(field_name, idx) printf("Field %s is: 0x%x\n", #field_name, fdt_header.field_name);
-    FDT_HEADER_FIELDS
-#undef X
-    printf("=========================================\n\n");
+    uart_init(uart_init_data);
+    printf("UART Initialize successfully!\n");
 
     int idx = 0;
     while (1) {

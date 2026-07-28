@@ -4,21 +4,25 @@ uint64_t UART_CLK       = 14750000;
 uint64_t UART_BASE      = 0x10000000;
 uint32_t UART_REG_SHIFT = 0;
 
-void uart_init(
-    uint64_t clock, uint64_t base_address, uint32_t reg_shift, uint32_t baudrate, bool enable_fifo
-) {
-    UART_CLK       = clock;
-    UART_BASE      = base_address;
-    UART_REG_SHIFT = reg_shift;
+void uart_init(UARTInit init_data) {
+    /*
+     * TODOs
+     * 1. bits setting
+     * 2. flow control setting
+     * 3. parity setting
+     */
+    UART_CLK       = init_data.clock;
+    UART_BASE      = init_data.base_addr;
+    UART_REG_SHIFT = init_data.reg_shift;
 
-    unsigned int divisor = (UART_CLK + (baudrate * 8)) / (baudrate * 16);
+    unsigned int divisor = (UART_CLK + (init_data.baudrate * 8)) / (init_data.baudrate * 16);
     unsigned char dll    = divisor & 0xff;
     unsigned char dlh    = (divisor >> 8) & 0xff;
 
     // Disable all interrupt and enable UART unit
     write_reg(UART_IER, 0x40); // UUE at bit 6
 
-    if (enable_fifo) {
+    if (init_data.enable_fifo) {
         write_reg(UART_FCR, 0x07);
     } else {
         write_reg(UART_FCR, 0x06); // reset transmit/receive FIFO at bit 1, 2

@@ -1,7 +1,9 @@
 #include "dtb.h"
 #include "printf.h"
 #include "string.h"
+#include "uart.h"
 #include "utils.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -24,6 +26,17 @@ int _node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
 
     char next_char = node_name[seg_len];
     return next_char == '\0' || next_char == '@';
+}
+
+static inline uint32_t _fdt_read_u32_save(FDTProp prop, uint32_t default_val) {
+    if (prop.val_ptr == NULL)
+        return default_val;
+    return BE_uint32(prop.val_ptr);
+}
+static inline uint64_t _fdt_read_u64_save(FDTProp prop, uint64_t default_val) {
+    if (prop.val_ptr == NULL)
+        return default_val;
+    return BE_uint64(prop.val_ptr);
 }
 
 FDTHeader get_fdt_header(const uint8_t *fdt_ptr) {
@@ -161,6 +174,8 @@ FDTProp fdt_find_prop_by_path(
     return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
 }
 
+//////////////////// Utils Functions /////////////////////////
+
 void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt) {
     FDTIterator iter = {dt_struct_ptr, dt_strings_prt, 0};
     FDTEvent ev;
@@ -194,4 +209,100 @@ void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr) {
             continue;
         }
     }
+}
+
+UARTInit fdt_get_uart_info(const uint8_t *fdt_ptr) {
+    /*
+     * TODOs
+     * 1. Try get uart from aliases if no stdout-path
+     */
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+
+    UARTInit uart_info = {
+        .base_addr        = 0,
+        .reg_shift        = 0,
+        .clock            = 14745600,
+        .baudrate         = 115200,
+        .bits             = 8,
+        .parity           = PARITY_NO,
+        .enable_fifo      = false,
+        .enable_flow_ctrl = false
+    };
+
+#define GET_PATH_PROP(path, name) fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, path, name)
+
+    FDTProp stdout_path_p   = GET_PATH_PROP("/chosen", "stdout-path");
+    const char *stdout_path = (const char *)stdout_path_p.val_ptr;
+    const char *uart_path;
+
+    if (stdout_path != NULL) {
+        char buf[128];
+        buf[127] = '\0';
+        strncpy(buf, stdout_path, 127);
+
+        char *saveptr = NULL;
+        uart_path     = strtok_r(buf, ":", &saveptr);
+        stdout_path   = saveptr;
+
+        if (stdout_path != NULL && *stdout_path) {
+            const char *uart_ctrl = stdout_path;
+
+            uart_info.baudrate = strtou32(stdout_path, &uart_ctrl, 10);
+            if (*uart_ctrl) {
+                switch (*uart_ctrl) {
+                case 'n':
+                    uart_info.parity = PARITY_NO;
+                    break;
+                case 'o':
+                    uart_info.parity = PARITY_ODD;
+                    break;
+                case 'e':
+                    uart_info.parity = PARITY_EVEN;
+                    break;
+                default:
+                    uart_info.parity = PARITY_NO;
+                }
+                uart_ctrl++;
+            }
+            if (*uart_ctrl) {
+                uart_info.bits = *uart_ctrl - '0';
+                uart_ctrl++;
+            }
+            if (*uart_ctrl) {
+                uart_info.enable_flow_ctrl = true;
+            }
+        }
+    } else {
+        FDTProp uart_path_p = GET_PATH_PROP("/aliases", "serial0");
+        uart_path           = (const char *)uart_path_p.val_ptr;
+    }
+
+    if (uart_path == NULL || uart_path[0] == '\0') {
+        return uart_info;
+    }
+
+    if (uart_path[0] != '/') {
+        FDTProp uart_path_p = GET_PATH_PROP("/aliases", uart_path);
+        uart_path           = (const char *)uart_path_p.val_ptr;
+        if (uart_path == NULL)
+            return uart_info;
+    }
+
+    FDTProp reg = GET_PATH_PROP(uart_path, "reg");
+    if (reg.val_ptr == NULL)
+        return uart_info;
+    uart_info.base_addr = BE_uint64(reg.val_ptr);
+
+    FDTProp reg_shift   = GET_PATH_PROP(uart_path, "reg-shift");
+    uart_info.reg_shift = _fdt_read_u32_save(reg_shift, uart_info.reg_shift);
+
+    FDTProp clock = GET_PATH_PROP(uart_path, "clock-frequency");
+    if (clock.val_ptr == NULL) {
+        clock = GET_PATH_PROP(uart_path, "clk-fpga");
+    }
+    uart_info.clock = _fdt_read_u32_save(clock, uart_info.clock);
+
+    return uart_info;
 }

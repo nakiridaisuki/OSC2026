@@ -1,6 +1,7 @@
 #ifndef _H_DEB_
 #define _H_DEB_
 
+#include "uart.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -75,7 +76,10 @@ FDTProp fdt_find_prop_by_path(
     const char *prop_name
 );
 
+//////////////////// Utils Functions /////////////////////////
+
 void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt);
 void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr);
+UARTInit fdt_get_uart_info(const uint8_t *fdt_ptr);
 
 #endif // !_H_DEB_
