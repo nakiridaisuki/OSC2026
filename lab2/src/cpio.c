@@ -1,7 +1,26 @@
 #include "cpio.h"
+#include "dtb.h"
+#include "string.h"
 #include "utils.h"
 #include <stdbool.h>
-#include <string.h>
+
+phys_addr_t CPIO_START_ADDR = 0;
+phys_addr_t CPIO_END_ADDR   = 0;
+
+const char *cpionewc_init_from_fdt(const uint8_t *fdt_ptr) {
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+    FDTProp initrd_start_p =
+        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-start");
+    FDTProp initrd_end_p =
+        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-end");
+
+    CPIO_START_ADDR = fdt_read_u64_save(initrd_start_p, 0);
+    CPIO_END_ADDR   = fdt_read_u64_save(initrd_end_p, 0);
+
+    return (const char *)CPIO_START_ADDR;
+}
 
 CPIONewcHeader cpionewc_read_header(const char *ptr) {
     CPIONewcHeader header;
@@ -23,7 +42,10 @@ CPIONewcHeader cpionewc_read_header(const char *ptr) {
 }
 
 CPIOFile cpionewc_next_file(const char **ptr) {
-    CPIOFile result = {.name = NULL, .data = NULL, .is_end = false};
+    CPIOFile result = {.name = NULL, .data = NULL};
+
+    if (ptr == NULL || *ptr == NULL)
+        return result;
 
     result.header = cpionewc_read_header(*ptr);
     if (!result.header.avail)
@@ -39,7 +61,7 @@ CPIOFile cpionewc_next_file(const char **ptr) {
     *ptr = ALIGN_4(*ptr);
 
     if (strcmp(result.name, "TRAILER!!!") == 0) {
-        result.is_end = true;
+        result.data = NULL;
     }
 
     return result;

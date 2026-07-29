@@ -44,6 +44,7 @@ $(OBJ_DIR)/kernel.bin: $(OBJ_DIR)/$(TARGET).elf | $(OBJ_DIR)
 	$(OBJCOPY) -O binary $< $@
 
 $(TARGET).fit: $(OBJ_DIR)/kernel.bin
+	cd rootfs && find . | cpio -o -H newc > ../$(OBJ_DIR)/initramfs.cpio
 	$(MKIMAGE) -f $(ITS) -D "-i $(COMMON_DIR) -i $(OBJ_DIR)" $@
 
 clean:
@@ -51,4 +52,5 @@ clean:
 	rm *.fit
 
 run: $(OBJ_DIR)/$(TARGET).elf
-	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf -nographic -initrd initramfs.cpio
+	cd rootfs && find . | cpio -o -H newc > ../$(OBJ_DIR)/initramfs.cpio
+	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf -nographic -initrd $(OBJ_DIR)/initramfs.cpio

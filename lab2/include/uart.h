@@ -49,7 +49,7 @@ enum {
     PARITY_EVEN = 2,
 };
 
-void uart_init(UARTInit init_data);
+void uart_init_from_fdt(const uint8_t *fdt_ptr);
 void uart_putchar(char c);
 char uart_getchar();
 int uart_getuint32();

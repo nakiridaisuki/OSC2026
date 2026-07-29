@@ -29,8 +29,7 @@ void waiting_magic_num() {
 }
 
 void main(unsigned long hartid, const uint8_t *fdt_ptr) {
-    UARTInit uart_init_data = fdt_get_uart_info(fdt_ptr);
-    uart_init(uart_init_data);
+    uart_init_from_fdt(fdt_ptr);
 
     unsigned long current_pc;
     asm volatile("auipc %0, 0" : "=r"(current_pc));

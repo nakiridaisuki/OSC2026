@@ -91,6 +91,5 @@ static inline uint64_t fdt_read_u64_save(FDTProp prop, uint64_t default_val) {
 }
 void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt);
 void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr);
-UARTInit fdt_get_uart_info(const uint8_t *fdt_ptr);
 
 #endif // !_DTB_H_

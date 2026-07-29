@@ -1,7 +1,11 @@
 #ifndef _CPIO_H_
 #define _CPIO_H_
 
+#include "types.h"
 #include <stdint.h>
+
+extern phys_addr_t CPIO_START_ADDR;
+extern phys_addr_t CPIO_END_ADDR;
 
 #define CPIO_NEWC_HEADER_FIELDS \
     X(inode)                    \
@@ -28,10 +32,10 @@ typedef struct {
 typedef struct {
     CPIONewcHeader header;
     const char *name;
-    const void *data;
-    uint8_t is_end;
+    const uint8_t *data;
 } CPIOFile;
 
+const char *cpionewc_init_from_fdt(const uint8_t *fdt_ptr);
 CPIONewcHeader cpionewc_read_header(const char *ptr);
 CPIOFile cpionewc_next_file(const char **ptr);
 

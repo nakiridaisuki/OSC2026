@@ -1,46 +1,23 @@
+#include "cpio.h"
 #include "dtb.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
 
-    UARTInit uart_init_data = fdt_get_uart_info(fdt_ptr);
-
-    char buf[256];
-    snprintf(
-        buf,
-        sizeof(buf),
-        "System initialized. \nUART base address is: 0x%016llx\n",
-        (unsigned long long)uart_init_data.base_addr
-    );
-    sbi_puts(buf);
-    snprintf(buf, sizeof(buf), "UART clock is: %d\n", (unsigned long long)uart_init_data.clock);
-    sbi_puts(buf);
-    snprintf(
-        buf, sizeof(buf), "UART reg shift is: %d\n", (unsigned long long)uart_init_data.reg_shift
-    );
-    sbi_puts(buf);
-
-    uart_init(uart_init_data);
+    uart_init_from_fdt(fdt_ptr);
     printf("UART Initialize successfully!\n");
 
-    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
-    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
-    FDTProp initrd_start_p =
-        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-start");
-    printf("initrd-start len: %d\n", initrd_start_p.len);
-    printf("initrd-start address: 0x%x\n", fdt_read_u64_save(initrd_start_p, 0));
-    FDTProp initrd_end_p =
-        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-end");
-    printf("initrd-end len: %d\n", initrd_end_p.len);
-    printf("initrd-end address: 0x%x\n", fdt_read_u64_save(initrd_end_p, 0));
+    cpionewc_init_from_fdt(fdt_ptr);
+    printf("initrd start address: %p\n", CPIO_START_ADDR);
 
     int idx = 0;
+    char buf[256];
     while (1) {
         printf("opi-rv2> ");
         memset(buf, 0, sizeof(buf));
@@ -68,12 +45,49 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
             printf("Hello World.\n");
         else if (strcmp(buf, "help") == 0) {
             printf("Avaliable commands:\n");
-            printf("  help - show this help.\n");
-            printf("  hello - print Hello World.\n");
-            printf("  reboot - system warm reboot.\n");
             printf("  info - print system info.\n");
-        } else if (strcmp(buf, "reboot") == 0) {
-            sbi_warm_reboot();
+            printf("  hello - print Hello World.\n");
+            printf("  ls - list all file in ramdisk.\n");
+            printf("  cat - print file contant.\n");
+            printf("  help - show this help.\n");
+        } else if (strcmp(buf, "ls") == 0) {
+            const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
+
+            uint32_t total_files = 0;
+            CPIOFile cpio_file   = cpionewc_next_file(&cpio_start_addr);
+            printf("%-10s %-10s\n", "size", "filename");
+            while (cpio_file.data != NULL) {
+                printf("%-10d %s\n", cpio_file.header.filesize, cpio_file.name);
+                cpio_file = cpionewc_next_file(&cpio_start_addr);
+                total_files++;
+            }
+            printf("Total %d files.\n", total_files);
+        } else if (strncmp(buf, "cat", 3) == 0) {
+            char *token = strtok(buf, " ");
+            token       = strtok(NULL, " ");
+
+            if (token == NULL) {
+                printf("ERROR: Can't get file name.\n");
+                continue;
+            }
+
+            const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
+            CPIOFile cpio_file          = cpionewc_next_file(&cpio_start_addr);
+            bool finded                 = false;
+            while (cpio_file.data != NULL) {
+                if (strcmp(token, cpio_file.name) == 0) {
+                    finded = true;
+                    break;
+                }
+                cpio_file = cpionewc_next_file(&cpio_start_addr);
+            }
+
+            if (finded) {
+                for (size_t i = 0; i < cpio_file.header.filesize; i++)
+                    uart_putchar(cpio_file.data[i]);
+            } else {
+                printf("cat: %s: No such file or directory\n", token);
+            }
         } else if (strcmp(buf, "info") == 0) {
             struct sbiret spec_ver = sbi_get_spec_version();
             struct sbiret impl_id  = sbi_get_impl_id();
