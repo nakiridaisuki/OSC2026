@@ -1,3 +1,4 @@
+#include "dtb.h"
 #include "printf.h"
 #include "uart.h"
 #include <stdint.h>
@@ -27,8 +28,9 @@ void waiting_magic_num() {
     }
 }
 
-void main(unsigned long hartid, const uint8_t *dtb_ptr) {
-    uart_init(14750000, 0xd4017000, 2, 115200, true);
+void main(unsigned long hartid, const uint8_t *fdt_ptr) {
+    UARTInit uart_init_data = fdt_get_uart_info(fdt_ptr);
+    uart_init(uart_init_data);
 
     unsigned long current_pc;
     asm volatile("auipc %0, 0" : "=r"(current_pc));
@@ -57,5 +59,5 @@ void main(unsigned long hartid, const uint8_t *dtb_ptr) {
 
     void (*kernel_entry)(unsigned long, const uint8_t *) =
         (void (*)(unsigned long, const uint8_t *))load_addr;
-    kernel_entry(hartid, dtb_ptr);
+    kernel_entry(hartid, fdt_ptr);
 }

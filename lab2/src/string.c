@@ -1,8 +1,7 @@
 #include "string.h"
 #include <stdbool.h>
 #include <stddef.h>
-
-bool isdigit(char c) { return '0' <= c && c <= '9'; }
+#include <stdint.h>
 
 int strcmp(const char *s1, const char *s2) {
     while (*s1 && *s1 == *s2) {
@@ -116,8 +115,36 @@ char *strtok(char *str, const char *delim) {
 
 uint32_t strtou32(const char *str, const char **endptr, int base) {
     uint32_t result = 0;
-    while (isdigit(*str)) {
-        result = result * base + *str - '0';
+
+    bool (*avail_digit)(char c);
+    if (base == 10)
+        avail_digit = isdigit;
+    else if (base == 16)
+        avail_digit = isxdigit;
+    else
+        return 0;
+
+    while (avail_digit(*str)) {
+        result = result * base + hextou8(*str);
+        str++;
+    }
+    if (endptr != NULL)
+        *endptr = str;
+    return result;
+}
+uint32_t strntou32(const char *str, const char **endptr, int n, int base) {
+    uint32_t result = 0;
+
+    bool (*avail_digit)(char c);
+    if (base == 10)
+        avail_digit = isdigit;
+    else if (base == 16)
+        avail_digit = isxdigit;
+    else
+        return 0;
+
+    while (n-- && avail_digit(*str)) {
+        result = result * base + hextou8(*str);
         str++;
     }
     if (endptr != NULL)

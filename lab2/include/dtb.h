@@ -1,7 +1,8 @@
-#ifndef _H_DEB_
-#define _H_DEB_
+#ifndef _DTB_H_
+#define _DTB_H_
 
 #include "uart.h"
+#include "utils.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -78,8 +79,18 @@ FDTProp fdt_find_prop_by_path(
 
 //////////////////// Utils Functions /////////////////////////
 
+static inline uint32_t fdt_read_u32_save(FDTProp prop, uint32_t default_val) {
+    if (prop.val_ptr == NULL)
+        return default_val;
+    return BE_uint32(prop.val_ptr);
+}
+static inline uint64_t fdt_read_u64_save(FDTProp prop, uint64_t default_val) {
+    if (prop.val_ptr == NULL)
+        return default_val;
+    return BE_uint64(prop.val_ptr);
+}
 void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt);
 void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr);
 UARTInit fdt_get_uart_info(const uint8_t *fdt_ptr);
 
-#endif // !_H_DEB_
+#endif // !_DTB_H_

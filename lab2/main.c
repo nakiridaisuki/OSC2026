@@ -6,9 +6,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-int main(unsigned long hartid, const uint8_t *dtb_ptr) {
+int main(unsigned long hartid, const uint8_t *fdt_ptr) {
 
-    UARTInit uart_init_data = fdt_get_uart_info(dtb_ptr);
+    UARTInit uart_init_data = fdt_get_uart_info(fdt_ptr);
 
     char buf[256];
     snprintf(
@@ -27,6 +27,18 @@ int main(unsigned long hartid, const uint8_t *dtb_ptr) {
 
     uart_init(uart_init_data);
     printf("UART Initialize successfully!\n");
+
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+    FDTProp initrd_start_p =
+        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-start");
+    printf("initrd-start len: %d\n", initrd_start_p.len);
+    printf("initrd-start address: 0x%x\n", fdt_read_u64_save(initrd_start_p, 0));
+    FDTProp initrd_end_p =
+        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/chosen", "linux,initrd-end");
+    printf("initrd-end len: %d\n", initrd_end_p.len);
+    printf("initrd-end address: 0x%x\n", fdt_read_u64_save(initrd_end_p, 0));
 
     int idx = 0;
     while (1) {

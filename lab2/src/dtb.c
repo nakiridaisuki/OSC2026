@@ -7,10 +7,6 @@
 #include <stddef.h>
 #include <stdint.h>
 
-void _align_4(const uint8_t **addr_ptr) {
-    *addr_ptr = (const uint8_t *)(((uint64_t)*addr_ptr + 3) & ~3);
-}
-
 uint32_t _get_u32_with_off(const uint8_t **addr_ptr) {
     if (addr_ptr == NULL || *addr_ptr == NULL)
         return 0;
@@ -26,17 +22,6 @@ int _node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
 
     char next_char = node_name[seg_len];
     return next_char == '\0' || next_char == '@';
-}
-
-static inline uint32_t _fdt_read_u32_save(FDTProp prop, uint32_t default_val) {
-    if (prop.val_ptr == NULL)
-        return default_val;
-    return BE_uint32(prop.val_ptr);
-}
-static inline uint64_t _fdt_read_u64_save(FDTProp prop, uint64_t default_val) {
-    if (prop.val_ptr == NULL)
-        return default_val;
-    return BE_uint64(prop.val_ptr);
 }
 
 FDTHeader get_fdt_header(const uint8_t *fdt_ptr) {
@@ -62,7 +47,7 @@ FDTEvent fdt_next(FDTIterator *iter) {
         if (token == FDT_BEGIN_NODE) {
             const char *node_name = (const char *)iter->cursor;
             iter->cursor += strlen(node_name) + 1;
-            _align_4(&iter->cursor);
+            iter->cursor = ALIGN_4(iter->cursor);
 
             iter->name = node_name;
             iter->depth++;
@@ -79,7 +64,7 @@ FDTEvent fdt_next(FDTIterator *iter) {
 
             iter->val = iter->cursor;
             iter->cursor += iter->len;
-            _align_4(&iter->cursor);
+            iter->cursor = ALIGN_4(iter->cursor);
 
             if (iter->strings != NULL)
                 iter->name = (const char *)(iter->strings + iter->nameoff);
@@ -296,13 +281,13 @@ UARTInit fdt_get_uart_info(const uint8_t *fdt_ptr) {
     uart_info.base_addr = BE_uint64(reg.val_ptr);
 
     FDTProp reg_shift   = GET_PATH_PROP(uart_path, "reg-shift");
-    uart_info.reg_shift = _fdt_read_u32_save(reg_shift, uart_info.reg_shift);
+    uart_info.reg_shift = fdt_read_u32_save(reg_shift, uart_info.reg_shift);
 
     FDTProp clock = GET_PATH_PROP(uart_path, "clock-frequency");
     if (clock.val_ptr == NULL) {
         clock = GET_PATH_PROP(uart_path, "clk-fpga");
     }
-    uart_info.clock = _fdt_read_u32_save(clock, uart_info.clock);
+    uart_info.clock = fdt_read_u32_save(clock, uart_info.clock);
 
     return uart_info;
 }

@@ -51,4 +51,4 @@ clean:
 	rm *.fit
 
 run: $(OBJ_DIR)/$(TARGET).elf
-	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf -nographic
+	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf -nographic -initrd initramfs.cpio
