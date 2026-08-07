@@ -25,8 +25,8 @@ extern phys_addr_t CPIO_END_ADDR;
 typedef struct {
 #define X(f_name) uint32_t f_name;
     CPIO_NEWC_HEADER_FIELDS
-    uint8_t avail;
 #undef X
+    uint8_t avail;
 } CPIONewcHeader; // CPIO New ASCII Format Header
 
 typedef struct {

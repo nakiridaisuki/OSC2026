@@ -1,9 +1,9 @@
 #include "cpio.h"
-#include "dtb.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
+#include "utils.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -51,43 +51,12 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
             printf("  cat - print file contant.\n");
             printf("  help - show this help.\n");
         } else if (strcmp(buf, "ls") == 0) {
-            const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
-
-            uint32_t total_files = 0;
-            CPIOFile cpio_file   = cpionewc_next_file(&cpio_start_addr);
-            printf("%-10s %-10s\n", "size", "filename");
-            while (cpio_file.data != NULL) {
-                printf("%-10d %s\n", cpio_file.header.filesize, cpio_file.name);
-                cpio_file = cpionewc_next_file(&cpio_start_addr);
-                total_files++;
-            }
-            printf("Total %d files.\n", total_files);
+            ls();
         } else if (strncmp(buf, "cat", 3) == 0) {
-            char *token = strtok(buf, " ");
-            token       = strtok(NULL, " ");
+            char *path = strtok(buf, " ");
+            path       = strtok(NULL, " ");
+            cat(path);
 
-            if (token == NULL) {
-                printf("ERROR: Can't get file name.\n");
-                continue;
-            }
-
-            const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
-            CPIOFile cpio_file          = cpionewc_next_file(&cpio_start_addr);
-            bool finded                 = false;
-            while (cpio_file.data != NULL) {
-                if (strcmp(token, cpio_file.name) == 0) {
-                    finded = true;
-                    break;
-                }
-                cpio_file = cpionewc_next_file(&cpio_start_addr);
-            }
-
-            if (finded) {
-                for (size_t i = 0; i < cpio_file.header.filesize; i++)
-                    uart_putchar(cpio_file.data[i]);
-            } else {
-                printf("cat: %s: No such file or directory\n", token);
-            }
         } else if (strcmp(buf, "info") == 0) {
             struct sbiret spec_ver = sbi_get_spec_version();
             struct sbiret impl_id  = sbi_get_impl_id();
