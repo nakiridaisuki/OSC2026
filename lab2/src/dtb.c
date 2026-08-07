@@ -1,7 +1,6 @@
 #include "dtb.h"
 #include "printf.h"
 #include "string.h"
-#include "uart.h"
 #include "utils.h"
 #include <stdbool.h>
 #include <stddef.h>
