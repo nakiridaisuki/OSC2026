@@ -101,3 +101,55 @@ lla t1, _start_address
 
 The relative distance between `_start_address` and `_start` symbol will always be 0.
 So `t1` will be current position, not the desired position.
+
+## Basic Exercise 2
+
+To parse the flattened devicetree (FDT) files, I designed a state machine.
+Pass an iterator into it, it will return the node/property's data.
+My iterator structure looks like this:
+
+```c
+typedef struct {
+    const uint8_t *cursor;
+    const uint8_t *strings;
+    int depth;
+
+    const uint8_t *event_start;
+    const char *name;
+    const uint8_t *val;
+    uint32_t len;
+    uint32_t nameoff;
+} FDTIterator;
+```
+
+This architecture let us use one `fdt_next` function handle complete FDT parsing, and return a structured data.
+Then we can focus on what types of data we need in each functional function like `get_fdt_node` or `get_fdt_prop`.
+
+The main target of this exercise is get the UART base address from device tree.
+By the data from internet, the UART node path usually specified in property `stdout-path` under `/chosen` node.
+In the .dts of our lab, it looks like this:
+
+```text
+chosen {
+    bootargs = "earlycon=sbi console=ttyS0,115200n8 loglevel=8 swiotlb=65536 rdinit=/init";
+    stdout-path = "serial0:115200n8";
+    linux,initrd-start = <0x00000000 0x00000000>;
+    linux,initrd-end   = <0x00000000 0x00000000>;
+};
+```
+
+The value separate by the colon, the front half is UART node name or aliases, the back half is UART setup data.
+If the node name doesn't start with `/`, that means this is a aliases, you should find the real path in `/aliases` node.
+
+In the `/aliases` node, we can get the real UART node path:
+
+```text
+aliases {
+    serial0 = "/soc/serial@d4017000";
+    ...
+}
+```
+
+## Basic Exercise 3
+
+In this exercise, we need to implement a CPIO parser.
