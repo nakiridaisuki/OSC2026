@@ -1,6 +1,7 @@
 #include "cpio.h"
 #include "printf.h"
 #include "sbi.h"
+#include "shell.h"
 #include "string.h"
 #include "uart.h"
 #include "utils.h"

@@ -68,3 +68,36 @@ Before jumping, it's important to use `fence.i` to make sure every instruction a
 
 Our transmit protocol is very simple.
 Start with a magic number `0x544F4F42`, then a 32-bit integer for the file size, then the binary kernel file.
+
+In `bootloader_entry.S`, we use `lla` to get the current start address in memory.
+To get desire starting address we defined in the linker script, we need to store it as a variable in our assembly.
+
+```asm
+_link_start_ptr:
+    .quad _start_address
+_link_end_ptr:
+    .quad _end_address
+_relocation_done_ptr:
+    .quad relocation_done
+```
+
+`.quad` will allocate an 8-byte area for data and the data will be filled by the linker.
+This data will be read like this:
+
+```asm
+lla t4, _link_start_ptr
+ld t1, 0(t4)
+```
+
+Why we can't use the method like `lla` to load the desired memory address is because when we use `lla`,
+the compiler will expand it into `auipc` + `addi` to calculate relative distance from current position.
+(so as we use `la` with `--mcmodel=medany` flag)
+
+If we write something like this:
+
+```asm
+lla t1, _start_address
+```
+
+The relative distance between `_start_address` and `_start` symbol will always be 0.
+So `t1` will be current position, not the desired position.

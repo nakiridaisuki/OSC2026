@@ -1,4 +1,3 @@
-#include "dtb.h"
 #include "printf.h"
 #include "uart.h"
 #include <stdint.h>
