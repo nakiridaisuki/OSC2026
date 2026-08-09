@@ -66,9 +66,6 @@ U-boot
 In this process, we jump to new bootloader/kernel code two times (relocate and kernel).
 Before jumping, it's important to use `fence.i` to make sure every instruction and data will be read from new code region.
 
-Our transmit protocol is very simple.
-Start with a magic number `0x544F4F42`, then a 32-bit integer for the file size, then the binary kernel file.
-
 In `bootloader_entry.S`, we use `lla` to get the current start address in memory.
 To get desire starting address we defined in the linker script, we need to store it as a variable in our assembly.
 
@@ -102,9 +99,59 @@ lla t1, _start_address
 The relative distance between `_start_address` and `_start` symbol will always be 0.
 So `t1` will be current position, not the desired position.
 
+After copy the bootloader to `0x02000000`, a `fence.i` need to be added.
+`fence.i` can make sure all instructions and data after it be read from memory instead of cache.
+This instruction will flash both I-cache and D-cache.
+
+Our transmit protocol is very simple.
+Start with a magic number `0x544F4F42`, then a 32-bit integer for the file size, then the binary kernel file.
+After the bootloader started, we can sand our kernel using command like this:
+
+```shell
+sudo python send_kernel.py /dev/ttyUSB0 ./build/kernel/kernel.bin
+```
+
+The bootloader will put kernel at `0x00200000` and jump to it.
+But, how to jump to it?
+
+Function is a block of machine code in object files.
+When we call the function, we will 'jump' to the code block.
+And the function pointer is a pointer that store the beginning address of the function.
+
+We can cast the starting address to function pointer, and call the function.
+Then the compiler will compile it into jump instruction.
+
+```c
+#define KERNEL_BASE 0x00200000
+// ...
+
+int main(){
+    // ...
+    unsigned char *load_addr = (unsigned char *)KERNEL_BASE;
+    // ...
+
+    void (*kernel_entry)() = (void (*)())load_addr;
+    kernel_entry();
+}
+```
+
+Cool isn't it?
+
+Using function call instead of manually jump has another advantage.
+The SBI will put flattened device tree pointer in `a1` register.
+Our bootloader will receive it, and we also need to do it for our kernel.
+Using function call can easily achieve it, just add some arguments into the function.
+Compiler will load data into register for us automatically.
+
+```c
+void (*kernel_entry)(unsigned long, const uint8_t *) =
+    (void (*)(unsigned long, const uint8_t *))load_addr;
+kernel_entry(hartid, fdt_ptr);
+```
+
 ## Basic Exercise 2
 
-To parse the flattened devicetree (FDT) files, I designed a state machine.
+To parse the flattened device tree (FDT) files, I designed a state machine.
 Pass an iterator into it, it will return the node/property's data.
 My iterator structure looks like this:
 
@@ -133,8 +180,6 @@ In the .dts of our lab, it looks like this:
 chosen {
     bootargs = "earlycon=sbi console=ttyS0,115200n8 loglevel=8 swiotlb=65536 rdinit=/init";
     stdout-path = "serial0:115200n8";
-    linux,initrd-start = <0x00000000 0x00000000>;
-    linux,initrd-end   = <0x00000000 0x00000000>;
 };
 ```
 
@@ -153,3 +198,6 @@ aliases {
 ## Basic Exercise 3
 
 In this exercise, we need to implement a CPIO parser.
+
+The CPIO parser is simple.
+The main problem now is the ramdisk data need to also be compiled into bootloader.
