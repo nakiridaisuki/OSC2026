@@ -14,7 +14,7 @@ OBJ_DIR    ?= ./build
 DTB        := $(COMMON_DIR)/$(DTB_NAME)
 ITS        := $(COMMON_DIR)/kernel.its
 
-CFLAGS  := -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude
+CFLAGS  += -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude
 LDFLAGS := -T $(LINKER)
 
 vpath %.c . src

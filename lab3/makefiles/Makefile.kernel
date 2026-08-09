@@ -1,6 +1,8 @@
 TARGET  ?= kernel
 OBJ_DIR ?= ./build/$(TARGET)
 LINKER  ?= linkers/linker.$(TARGET).ld
-OBJS    := main.o boot.o string.o uart.o printf.o sbi.o dtb.o utils.o cpio.o shell.o
+OBJS    := main.o boot.o string.o uart.o printf.o sbi.o dtb.o utils.o cpio.o shell.o malloc.o
+
+CFLAGS := -march=rv64gc_zbb
 
 include ../common/common.mk
