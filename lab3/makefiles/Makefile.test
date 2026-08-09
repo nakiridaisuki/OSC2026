@@ -1,0 +1,38 @@
+TARGET := test
+OBJS   := test.o string.o
+
+PREFIX :=
+CC     := $(PREFIX)gcc
+
+COMMON_DIR := ../common
+OBJ_DIR    := ./build/test
+
+CFLAGS  := -Wall -Iinclude
+LDFLAGS :=
+
+vpath %.c . src
+vpath %.S . src
+vpath %.s . src
+
+REAL_OBJS := $(addprefix $(OBJ_DIR)/, $(OBJS))
+
+all: $(OBJ_DIR)/$(TARGET).elf
+	$(OBJ_DIR)/$(TARGET).elf
+
+$(OBJ_DIR):
+	mkdir -p $(OBJ_DIR)
+
+$(OBJ_DIR)/%.o: %.s | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/%.o: %.S | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/%.o: %.c | $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(OBJ_DIR)/$(TARGET).elf: $(REAL_OBJS) $(LINKER) | $(OBJ_DIR)
+	$(CC) $(LDFLAGS) -o $@ $(REAL_OBJS)
+
+clean:
+	rm -rf $(OBJ_DIR)
