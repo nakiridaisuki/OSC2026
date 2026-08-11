@@ -6,6 +6,14 @@
 
 #define ALIGN_4(addr) ((__typeof__(addr))(((uintptr_t)(addr) + 3) & ~3))
 
+#ifdef DEBUG
+#define DBG_PRINTF(fmt, ...) printf("[DEBUG %s] " fmt, __func__, ##__VA_ARGS__)
+#else
+#define DBG_PRINTF(fmt, ...) \
+    do {                     \
+    } while (0)
+#endif // DEBUG
+
 uint32_t LE_uint32(const uint8_t *ptr);
 uint32_t BE_uint32(const uint8_t *ptr);
 uint64_t LE_uint64(const uint8_t *ptr);
