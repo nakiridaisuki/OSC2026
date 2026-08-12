@@ -1,9 +1,12 @@
 #include "cpio.h"
+#include "dtb.h"
 #include "malloc.h"
 #include "printf.h"
 #include "shell.h"
 #include "uart.h"
+#include "utils.h"
 #include <stdint.h>
+#include <string.h>
 
 void test_alloc_1() {
     printf("Testing memory allocation...\n");
@@ -80,6 +83,28 @@ void test_alloc_1() {
     }
 }
 
+void print_memory_data(const uint8_t *node_ptr, const char *node_name, void *dt_string_ptr) {
+    if (fdt_node_name_eq(node_name, "memory", 6)) {
+        FDTProp mem_reg = fdt_find_prop(node_ptr, dt_string_ptr, "reg");
+        printf("Memory reg len %d\n", mem_reg.len);
+        printf("Memory starting addr 0x%lx\n", BE_uint64(mem_reg.val_ptr));
+        printf("Memory len 0x%lx\n", BE_uint64(mem_reg.val_ptr + 8));
+    }
+}
+void print_reserve_memory_data(
+    const uint8_t *node_ptr, const char *node_name, void *dt_string_ptr
+) {
+    FDTProp mem_reg = fdt_find_prop(node_ptr, dt_string_ptr, "reg");
+    printf("Reserve node: %s\n", node_name);
+    if (mem_reg.val_ptr == NULL) {
+        printf("NULL reg\n");
+    } else {
+        printf("Reserve reg len %d\n", mem_reg.len);
+        printf("Reserve starting addr 0x%lx\n", BE_uint64(mem_reg.val_ptr));
+        printf("Reserve len 0x%lx\n", BE_uint64(mem_reg.val_ptr + 8));
+    }
+}
+
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
 
     uart_init_from_fdt(fdt_ptr);
@@ -88,9 +113,17 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%p\n", CPIO_START_ADDR);
 
-    init_palloc();
-    init_dalloc();
-    test_alloc_1();
+    // init_palloc();
+    // init_dalloc();
+    // test_alloc_1();
+
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+    fdt_foreach_subnode(dt_struct_ptr, print_memory_data, (void *)dt_strings_ptr);
+
+    const uint8_t *reserved_mem = fdt_find_node_by_path(dt_struct_ptr, "/reserved-memory");
+    fdt_foreach_subnode(reserved_mem, print_reserve_memory_data, (void *)dt_strings_ptr);
 
     shell();
 

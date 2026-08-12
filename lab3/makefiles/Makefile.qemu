@@ -2,4 +2,4 @@ TARGET  := qemu
 OBJ_DIR := ./build/$(TARGET)
 LINKER  := linkers/linker.$(TARGET).ld
 
-include ./Makefile.kernel
+include ./makefiles/Makefile.kernel

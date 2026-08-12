@@ -15,7 +15,7 @@ uint32_t _get_u32_with_off(const uint8_t **addr_ptr) {
     return result;
 }
 
-int _node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
+int fdt_node_name_eq(const char *node_name, const char *seg, size_t seg_len) {
     if (strncmp(node_name, seg, seg_len) != 0)
         return 0;
 
@@ -40,10 +40,9 @@ FDTEvent fdt_next(FDTIterator *iter) {
 
         if (token == FDT_END)
             return FDT_END;
-        if (token == FDT_NOP)
+        else if (token == FDT_NOP)
             continue;
-
-        if (token == FDT_BEGIN_NODE) {
+        else if (token == FDT_BEGIN_NODE) {
             const char *node_name = (const char *)iter->cursor;
             iter->cursor += strlen(node_name) + 1;
             iter->cursor = ALIGN_4(iter->cursor);
@@ -52,12 +51,10 @@ FDTEvent fdt_next(FDTIterator *iter) {
             iter->depth++;
 
             return FDT_BEGIN_NODE;
-        }
-        if (token == FDT_END_NODE) {
+        } else if (token == FDT_END_NODE) {
             iter->depth--;
             return FDT_END_NODE;
-        }
-        if (token == FDT_PROP) {
+        } else if (token == FDT_PROP) {
             iter->len     = _get_u32_with_off(&iter->cursor);
             iter->nameoff = _get_u32_with_off(&iter->cursor);
 
@@ -68,6 +65,8 @@ FDTEvent fdt_next(FDTIterator *iter) {
             if (iter->strings != NULL)
                 iter->name = (const char *)(iter->strings + iter->nameoff);
             return FDT_PROP;
+        } else {
+            printf("FDT ERROR: Unknow token %d\n", token);
         }
     }
 }
@@ -82,7 +81,7 @@ fdt_find_node(const uint8_t *dt_struct_ptr, const char *target_name, size_t targ
                 if (iter.depth == 1 && iter.name[0] == '\0')
                     return iter.event_start;
             } else {
-                if (iter.depth == 2 && _node_name_eq(iter.name, target_name, target_len))
+                if (iter.depth == 2 && fdt_node_name_eq(iter.name, target_name, target_len))
                     return iter.event_start;
             }
         }
@@ -100,19 +99,15 @@ fdt_find_prop(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt, const
     FDTIterator iter = {dt_struct_ptr, dt_strings_prt, 0};
     FDTEvent ev;
     while ((ev = fdt_next(&iter)) != FDT_END) {
-        if (ev == FDT_END_NODE) {
-            if (iter.depth <= 0)
-                break;
-            continue;
+        if (ev == FDT_END_NODE && iter.depth <= 0) {
+            break;
         }
-        if (ev == FDT_PROP) {
-            if (iter.depth == 1 && strcmp(prop_name, iter.name) == 0) {
-                result.len      = iter.len;
-                result.prop_ptr = iter.event_start;
-                result.name_ptr = iter.name;
-                result.val_ptr  = iter.val;
-                return result;
-            }
+        if (ev == FDT_PROP && iter.depth == 1 && strcmp(prop_name, iter.name) == 0) {
+            result.len      = iter.len;
+            result.prop_ptr = iter.event_start;
+            result.name_ptr = iter.name;
+            result.val_ptr  = iter.val;
+            return result;
         }
     }
     return result;
@@ -139,15 +134,6 @@ const uint8_t *fdt_find_node_by_path(const uint8_t *dt_struct_ptr, const char *p
     return dt_struct_ptr;
 }
 
-FDTProp fdt_find_prop_by_name(
-    const uint8_t *dt_struct_ptr,
-    const uint8_t *dt_strings_prt,
-    const char *node_name,
-    const char *prop_name
-) {
-    dt_struct_ptr = fdt_find_node(dt_struct_ptr, node_name, strlen(node_name));
-    return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
-}
 FDTProp fdt_find_prop_by_path(
     const uint8_t *dt_struct_ptr,
     const uint8_t *dt_strings_prt,
@@ -156,6 +142,19 @@ FDTProp fdt_find_prop_by_path(
 ) {
     dt_struct_ptr = fdt_find_node_by_path(dt_struct_ptr, path);
     return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
+}
+
+void fdt_foreach_subnode(const uint8_t *parent_ptr, fdt_node_cb_t callback, void *opaque_arg) {
+    FDTIterator iter = {parent_ptr, NULL, 0};
+    FDTEvent ev;
+    while ((ev = fdt_next(&iter)) != FDT_END) {
+        if (ev == FDT_BEGIN_NODE && iter.depth == 2) {
+            callback(iter.event_start, iter.name, opaque_arg);
+        }
+        if (ev == FDT_END_NODE && iter.depth <= 0) {
+            break;
+        }
+    }
 }
 
 //////////////////// Utils Functions /////////////////////////

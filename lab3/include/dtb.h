@@ -49,11 +49,15 @@ typedef struct {
     uint32_t nameoff;
 } FDTIterator;
 
+typedef void (*fdt_node_cb_t)(const uint8_t *node_ptr, const char *node_name, void *opaque_arg);
+
 typedef struct {
 #define X(field_name, idx) uint32_t field_name;
     FDT_HEADER_FIELDS
 #undef X
 } FDTHeader;
+
+int fdt_node_name_eq(const char *node_name, const char *seg, size_t seg_len);
 
 FDTHeader get_fdt_header(const uint8_t *fdt_ptr);
 
@@ -61,14 +65,9 @@ const uint8_t *
 fdt_find_node(const uint8_t *dt_struct_ptr, const char *node_name, size_t target_len);
 FDTProp
 fdt_find_prop(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt, const char *prop_name);
+void fdt_foreach_subnode(const uint8_t *parent_ptr, fdt_node_cb_t callback, void *opaque_arg);
 
 const uint8_t *fdt_find_node_by_path(const uint8_t *dt_struct_ptr, const char *path);
-FDTProp fdt_find_prop_by_name(
-    const uint8_t *dt_struct_ptr,
-    const uint8_t *dt_strings_prt,
-    const char *node_name,
-    const char *prop_name
-);
 FDTProp fdt_find_prop_by_path(
     const uint8_t *dt_struct_ptr,
     const uint8_t *dt_strings_prt,
