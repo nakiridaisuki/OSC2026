@@ -1,16 +1,37 @@
 #include "malloc.h"
+#include "cpio.h"
 #include "dstruc.h"
+#include "dtb.h"
 #include "printf.h"
 #include "string.h"
+#include "types.h"
 #include "utils.h"
-#include <iso646.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
-PAGE pages_arr[PAGE_N];
+uint8_t TOTAL_ZONES;
+MemZone zones[64];
 LINKED_LIST_NODE free_pages[MAX_ORDER];
 LINKED_LIST_NODE free_slabs[SLAB_COUNT];
+
+extern uint8_t _stack_top[];
+extern uint8_t _start[];
+phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
+
+#define Node2Page(nodeptr) container_of(nodeptr, PAGE, list)
+
+#define PageStart(page_ptr) (zones[page_ptr->zone].pages_arr)
+#define PageSize(page_ptr)  (zones[page_ptr->zone].arr_size)
+#define PageIdx(page_ptr)   (page_ptr - PageStart(page_ptr))
+#define MemStart(page_ptr)  (zones[page_ptr->zone].mem_start)
+#define MemSize(page_ptr)   (zones[page_ptr->zone].mem_size)
+
+void *_early_alloc(uint32_t size) {
+    void *mem_ptr = (void *)early_mem_ptr;
+    early_mem_ptr += size;
+    return mem_ptr;
+}
 
 uint8_t get_buddy_order(uint64_t size) {
     uint64_t pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
@@ -26,20 +47,121 @@ uint8_t get_slab_order(uint32_t size) {
     return 32 - __builtin_clz(slabs - 1);
 }
 
+PAGE *addr2page(uint8_t *addr) {
+    size_t zid = 0;
+    while ((phys_addr_t)addr > zones[zid].mem_start + zones[zid].mem_size)
+        zid++;
+    uint64_t offset = (phys_addr_t)addr - zones[zid].mem_start;
+    return &zones[zid].pages_arr[offset / PAGE_SIZE];
+}
+
+void lock_mem_region(phys_addr_t start_addr, phys_addr_t size) {
+    phys_addr_t end_addr = start_addr + size;
+    start_addr           = start_addr & ~(PAGE_SIZE - 1);
+    while (start_addr < end_addr) {
+        PAGE *page      = addr2page((uint8_t *)(start_addr));
+        page->allocated = true;
+        start_addr += PAGE_SIZE;
+    }
+}
+
+void fdt_rsvmem_cb(const uint8_t *node_ptr, const char *node_name, void *dt_string_ptr) {
+    FDTProp mem_reg = fdt_find_prop(node_ptr, dt_string_ptr, "reg");
+    if (mem_reg.val_ptr == NULL)
+        return;
+    phys_addr_t start_addr = BE_uint64(mem_reg.val_ptr);
+    phys_addr_t size       = BE_uint64(mem_reg.val_ptr + 8);
+    lock_mem_region(start_addr, size);
+}
+
+void fdt_mem_cb(const uint8_t *node_ptr, const char *node_name, void *dt_string_ptr) {
+    if (fdt_node_name_eq(node_name, "memory", 6)) {
+        FDTProp mem_reg = fdt_find_prop(node_ptr, dt_string_ptr, "reg");
+        if (mem_reg.val_ptr == NULL)
+            return;
+        zones[TOTAL_ZONES].mem_start = BE_uint64(mem_reg.val_ptr);
+        zones[TOTAL_ZONES].mem_size  = BE_uint64(mem_reg.val_ptr + 8);
+        zones[TOTAL_ZONES].arr_size  = zones[TOTAL_ZONES].mem_size / PAGE_SIZE;
+        zones[TOTAL_ZONES].pages_arr = _early_alloc(zones[TOTAL_ZONES].arr_size * sizeof(PAGE));
+        TOTAL_ZONES++;
+    }
+}
+
+void init_malloc(uint8_t *fdt_ptr) {
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+
+    TOTAL_ZONES = 0;
+    fdt_foreach_subnode(dt_struct_ptr, fdt_mem_cb, (void *)dt_strings_ptr);
+
+    init_palloc();
+    init_dalloc();
+
+    const uint8_t *reserved_mem = fdt_find_node_by_path(dt_struct_ptr, "/reserved-memory");
+    fdt_foreach_subnode(reserved_mem, fdt_rsvmem_cb, (void *)dt_strings_ptr);
+
+    // Align early memory allocater ptr to 4kB
+    early_mem_ptr = (early_mem_ptr + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1);
+    lock_mem_region((phys_addr_t)_start, early_mem_ptr - (phys_addr_t)_start);
+    lock_mem_region((phys_addr_t)fdt_ptr, fdt_header.totalsize);
+    lock_mem_region(CPIO_START_ADDR, CPIO_END_ADDR - CPIO_START_ADDR);
+
+    for (size_t i = 0; i < TOTAL_ZONES; i++) {
+        for (size_t j = 0; j < zones[i].arr_size; j++) {
+            PAGE *page = &zones[i].pages_arr[j];
+            if (!page->allocated && page->order >= 0) {
+                pfree(page);
+            }
+        }
+    }
+}
+
+uint8_t *malloc(uint64_t bytes) {
+    if (bytes <= PAGE_SIZE / 2)
+        return dalloc(bytes);
+    return palloc(bytes);
+}
+
+void free(uint8_t *ptr) {
+    uint64_t mem_ptr = (uint64_t)ptr & ~(PAGE_SIZE - 1);
+    PAGE *page       = addr2page((uint8_t *)mem_ptr);
+    if (page->slab_size != 0) {
+
+        if (page->slab_head == NULL) {
+            uint8_t order = get_slab_order(page->slab_size);
+            lln_add(&free_slabs[order], &page->list);
+        }
+
+        *(void **)ptr   = page->slab_head;
+        page->slab_head = ptr;
+
+        page->slab_count--;
+        if (page->slab_count == 0) {
+            page->slab_size = 0;
+            lln_remove(&page->list);
+            pfree(page);
+        }
+        DBG_PRINTF("[CF] Free 0x%p at order %d, page %d.\n", ptr, page->order, PageIdx(page));
+    } else
+        pfree(page);
+}
+
 void init_palloc() {
-    memset(pages_arr, 0, sizeof(pages_arr));
-    memset(free_pages, 0, sizeof(free_pages));
-    for (size_t i = 0; i < PAGE_N; i++)
-        lln_init(&pages_arr[i].list);
     for (size_t i = 0; i < MAX_ORDER; i++)
         lln_init(&free_pages[i]);
 
-    uint8_t max_order = get_buddy_order(MEM_SIZE);
-
-    pages_arr[0].order     = max_order;
-    pages_arr[0].allocated = false;
-
-    lln_add(&free_pages[max_order], &pages_arr[0].list);
+    for (size_t zid = 0; zid < TOTAL_ZONES; zid++) {
+        PAGE *pages      = zones[zid].pages_arr;
+        uint32_t arrsize = zones[zid].arr_size;
+        memset(pages, 0, sizeof(PAGE) * arrsize);
+        for (size_t j = 0; j < arrsize; j++) {
+            lln_init(&pages[j].list);
+            pages[j].order     = 0;
+            pages[j].zone      = zid;
+            pages[j].allocated = false;
+        }
+    }
 }
 
 uint8_t *palloc(uint64_t bytes) {
@@ -52,10 +174,10 @@ uint8_t *palloc(uint64_t bytes) {
 
             DBG_PRINTF(
                 "[-] Remove page %d from order %d. Range of pages: [%d, %d]\n",
-                avail_page - pages_arr,
+                avail_page - PageStart(avail_page),
                 avail_page->order,
-                avail_page - pages_arr,
-                avail_page - pages_arr + (1 << avail_page->order)
+                avail_page - PageStart(avail_page),
+                avail_page - PageStart(avail_page) + (1 << avail_page->order)
             );
             break;
         }
@@ -74,69 +196,68 @@ uint8_t *palloc(uint64_t bytes) {
 
         DBG_PRINTF(
             "[+] Add page %d to order %d. Range of pages: [%d, %d]\n",
-            right_page - pages_arr,
+            right_page - PageStart(right_page),
             right_page->order,
-            right_page - pages_arr,
-            right_page - pages_arr + (1 << right_page->order)
+            right_page - PageStart(right_page),
+            right_page - PageStart(right_page) + (1 << right_page->order)
         );
     }
 
     avail_page->allocated = true;
-    size_t page_idx       = avail_page - pages_arr;
-    uint8_t *page_ptr     = (uint8_t *)(MEM_START + PAGE_SIZE * page_idx);
+    size_t page_idx       = PageIdx(avail_page);
+    uint8_t *mem_ptr      = (uint8_t *)(MemStart(avail_page) + PAGE_SIZE * page_idx);
 
     DBG_PRINTF(
         "[PA] Allocate 0x%lx at order %d, page %d for require size %lu. Next page at order %d in "
         "freelist: 0x%lx\n",
-        page_ptr,
+        mem_ptr,
         avail_page->order,
         page_idx,
         bytes,
         avail_page->order,
         free_pages[avail_page->order].next == &free_pages[avail_page->order]
             ? NULL
-            : (uint8_t *)(MEM_START +
-                          PAGE_SIZE * (Node2Page(free_pages[avail_page->order].next) - pages_arr))
+            : (uint8_t *)(MemStart(avail_page) +
+                          PAGE_SIZE * (Node2Page(free_pages[avail_page->order].next) -
+                                       PageStart(avail_page)))
     );
-    return page_ptr;
+    return mem_ptr;
 }
 
-void pfree(uint8_t *page) {
-    size_t page_idx = ((uint64_t)page - MEM_START) / PAGE_SIZE;
+void pfree(PAGE *page) {
+    if (page->order < 0)
+        return;
 
-    pages_arr[page_idx].allocated = false;
-    while (pages_arr[page_idx].order < MAX_ORDER - 1) {
-        size_t buddy_page_idx = page_idx ^ (1ULL << pages_arr[page_idx].order);
-        if (buddy_page_idx >= PAGE_N)
+    page->allocated = false;
+    while (page->order < MAX_ORDER - 1) {
+        size_t page_idx       = PageIdx(page);
+        size_t buddy_page_idx = page_idx ^ (1ULL << page->order);
+        if (buddy_page_idx >= PageSize(page))
             break;
 
-        if (pages_arr[buddy_page_idx].allocated ||
-            pages_arr[buddy_page_idx].order != pages_arr[page_idx].order)
+        PAGE *buddy_page = &PageStart(page)[buddy_page_idx];
+        if (buddy_page->allocated || buddy_page->order != page->order)
             break;
-
-        PAGE *buddy_page_ptr = pages_arr + buddy_page_idx;
-        lln_remove(&buddy_page_ptr->list);
+        lln_remove(&buddy_page->list);
 
         DBG_PRINTF(
-            "[PM] Merge pages %d and %d at order %d.\n",
-            page_idx,
-            buddy_page_idx,
-            buddy_page_ptr->order
+            "[PM] Merge pages %d and %d at order %d.\n", page_idx, buddy_page_idx, buddy_page->order
         );
 
-        page_idx = page_idx < buddy_page_idx ? page_idx : buddy_page_idx;
-        pages_arr[page_idx].order++;
-        pages_arr[page_idx].allocated = false;
+        if (page_idx > buddy_page_idx) {
+            PAGE *tmp  = page;
+            page       = buddy_page;
+            buddy_page = tmp;
+        }
+        buddy_page->order = -1;
+        page->order++;
+        page->allocated = false;
     }
-
-    PAGE *page_ptr = pages_arr + page_idx;
-    lln_add(&free_pages[page_ptr->order], &page_ptr->list);
-
-    DBG_PRINTF("[PF] Free 0x%p at order %d, page %d.\n", page, page_ptr->order, page_idx);
+    lln_add(&free_pages[page->order], &page->list);
+    DBG_PRINTF("[PF] Free 0x%p at order %d, page %d.\n", page, page->order, PageIdx(page));
 }
 
 void init_dalloc() {
-    memset(free_slabs, 0, sizeof(free_slabs));
     for (size_t i = 0; i < MAX_ORDER; i++)
         lln_init(&free_slabs[i]);
 }
@@ -146,25 +267,24 @@ uint8_t *dalloc(uint32_t bytes) {
 
     // Allocate a new page for dynamic allocater
     if (free_slabs[order].next == &free_slabs[order]) {
-        uint8_t *new_page = palloc(PAGE_SIZE);
-        if (new_page == NULL)
+        uint8_t *new_mem_ptr = palloc(PAGE_SIZE);
+        if (new_mem_ptr == NULL)
             return NULL;
 
-        size_t page_idx = ((uint64_t)new_page - MEM_START) / PAGE_SIZE;
-        PAGE *page      = &pages_arr[page_idx];
+        PAGE *page = addr2page(new_mem_ptr);
 
         page->slab_count = 0;
         page->slab_size  = (MIN_SLAB << order);
-        page->slab_head  = new_page;
+        page->slab_head  = new_mem_ptr;
 
         // Init block list
         uint32_t total_blocks = PAGE_SIZE / page->slab_size;
         for (int i = 0; i < total_blocks - 1; i++) {
-            void **curr_block = (void **)(new_page + i * page->slab_size);
-            void *next_block  = (new_page + (i + 1) * page->slab_size);
+            void **curr_block = (void **)(new_mem_ptr + i * page->slab_size);
+            void *next_block  = (new_mem_ptr + (i + 1) * page->slab_size);
             *curr_block       = next_block;
         }
-        void **last_block = (void **)(new_page + (total_blocks - 1) * page->slab_size);
+        void **last_block = (void **)(new_mem_ptr + (total_blocks - 1) * page->slab_size);
         *last_block       = NULL;
 
         lln_add(&free_slabs[order], &page->list);
@@ -182,46 +302,9 @@ uint8_t *dalloc(uint32_t bytes) {
         "[CA] Allocate 0x%lx at order %d, page %d for require size %lu.\n",
         slab_ptr,
         avail_page->order,
-        avail_page - pages_arr,
+        avail_page - PageStart(avail_page),
         bytes
     );
 
     return slab_ptr;
-}
-
-void dfree(uint8_t *slab) {
-    uint64_t page_ptr = (uint64_t)slab & ~(PAGE_SIZE - 1);
-    size_t page_idx   = (page_ptr - MEM_START) / PAGE_SIZE;
-    PAGE *page        = &pages_arr[page_idx];
-
-    if (page->slab_head == NULL) {
-        uint8_t order = get_slab_order(page->slab_size);
-        lln_add(&free_slabs[order], &page->list);
-    }
-
-    *(void **)slab  = page->slab_head;
-    page->slab_head = slab;
-
-    page->slab_count--;
-    if (pages_arr[page_idx].slab_count == 0) {
-        pages_arr[page_idx].slab_size = 0;
-        lln_remove(&pages_arr[page_idx].list);
-        pfree((uint8_t *)page_ptr);
-    }
-    DBG_PRINTF("[CF] Free 0x%p at order %d, page %d.\n", slab, pages_arr[page_idx].order, page_idx);
-}
-
-uint8_t *malloc(uint64_t bytes) {
-    if (bytes <= PAGE_SIZE / 2)
-        return dalloc(bytes);
-    return palloc(bytes);
-}
-
-void free(uint8_t *ptr) {
-    uint64_t page_ptr = (uint64_t)ptr & ~(PAGE_SIZE - 1);
-    size_t page_idx   = (page_ptr - MEM_START) / PAGE_SIZE;
-    if (pages_arr[page_idx].slab_size != 0)
-        dfree(ptr);
-    else
-        pfree(ptr);
 }

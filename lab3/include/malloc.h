@@ -2,22 +2,18 @@
 #define _MALLOC_H_
 
 #include "dstruc.h"
+#include "types.h"
 #include <stdint.h>
 
-#define MEM_START 0x100000000
-#define MEM_SIZE  0x100000000
-#define PAGE_SIZE 4096
-#define MIN_SLAB  16
-
-#define PAGE_N     MEM_SIZE / PAGE_SIZE
+#define PAGE_SIZE  4096
+#define MIN_SLAB   16
 #define MAX_ORDER  64
 #define SLAB_COUNT 8 // 16, 32, 64, 128, 256, 512, 1024, 2048
 
-#define Node2Page(nodeptr) container_of(nodeptr, PAGE, list)
-
 typedef struct _page PAGE;
 struct _page {
-    uint8_t order;
+    int order;
+    uint8_t zone;
     union {
         uint8_t allocated;
         uint8_t slab_count;
@@ -27,13 +23,20 @@ struct _page {
     LINKED_LIST_NODE list;
 };
 
+typedef struct {
+    phys_addr_t mem_start;
+    phys_addr_t mem_size;
+    PAGE *pages_arr;
+    uint32_t arr_size;
+} MemZone;
+
+void init_malloc(uint8_t *fdt_ptr);
 void init_palloc();
 void init_dalloc();
 uint8_t *palloc(uint64_t bytes);
-void pfree(uint8_t *page);
+void pfree(PAGE *page);
 uint8_t *dalloc(uint32_t bytes);
-void dfree(uint8_t *page);
 uint8_t *malloc(uint64_t bytes);
-void free(uint8_t *page);
+void free(uint8_t *mem_ptr);
 
 #endif // !_MALLOC_H_

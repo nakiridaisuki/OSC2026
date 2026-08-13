@@ -48,7 +48,7 @@ void test_alloc_1() {
     }
 
     // Test exceeding the maximum size
-    const uint64_t MAX_ALLOC_SIZE = MEM_SIZE;
+    const uint64_t MAX_ALLOC_SIZE = 0x200000000;
     char *kmem_ptr7               = (char *)malloc(MAX_ALLOC_SIZE + 1);
     if (kmem_ptr7 == NULL) {
         printf("Allocation failed as expected for size > MAX_ALLOC_SIZE\n");
@@ -113,17 +113,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%p\n", CPIO_START_ADDR);
 
-    // init_palloc();
-    // init_dalloc();
-    // test_alloc_1();
-
-    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
-    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
-    fdt_foreach_subnode(dt_struct_ptr, print_memory_data, (void *)dt_strings_ptr);
-
-    const uint8_t *reserved_mem = fdt_find_node_by_path(dt_struct_ptr, "/reserved-memory");
-    fdt_foreach_subnode(reserved_mem, print_reserve_memory_data, (void *)dt_strings_ptr);
+    init_malloc(fdt_ptr);
+    test_alloc_1();
 
     shell();
 

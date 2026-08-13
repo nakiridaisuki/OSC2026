@@ -5,6 +5,8 @@
 #include <stdint.h>
 
 #define ALIGN_4(addr) ((__typeof__(addr))(((uintptr_t)(addr) + 3) & ~3))
+#define LOWBIT(x)     (x & -x)
+#define SWAP(a, b)    a ^= b ^= a ^= b
 
 #ifdef DEBUG
 #define DBG_PRINTF(fmt, ...) printf("[DEBUG %s] " fmt, __func__, ##__VA_ARGS__)
@@ -35,5 +37,9 @@ static inline void write_BE64(uint8_t *dest, uint64_t val) {
     dest[6] = (val >> 8) & 0xff;
     dest[7] = val & 0xff;
 }
+
+static inline uint8_t __ffs64(uint64_t word) { return __builtin_ctzll(word); }
+
+static inline uint8_t __fls64(uint64_t word) { return 63 - __builtin_clzll(word); }
 
 #endif // !_UTILS_H_

@@ -30,6 +30,7 @@ inline static int lln_remove(LINKED_LIST_NODE *node) {
         return 1;
     node->prev->next = node->next;
     node->next->prev = node->prev;
+    node->prev = node->next = node;
     return 0;
 }
 
