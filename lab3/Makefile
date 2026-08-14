@@ -1,12 +1,12 @@
 all:
 	make -f makefiles/Makefile.bootloader
-	make -f makefiles/Makefile.kernel
+	bear -- make -f makefiles/Makefile.kernel
 
 bootloader:
 	make -f makefiles/Makefile.bootloader
 
 kernel:
-	make -f makefiles/Makefile.kernel
+	bear -- make -f makefiles/Makefile.kernel
 
 qemu:
 	make -f makefiles/Makefile.qemu run

@@ -4,15 +4,22 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define ALIGN_4(addr) ((__typeof__(addr))(((uintptr_t)(addr) + 3) & ~3))
-#define LOWBIT(x)     (x & -x)
-#define SWAP(a, b)    a ^= b ^= a ^= b
+#define ALIGN_UP_4(addr)      ((__typeof__(addr))(((uintptr_t)(addr) + 3) & ~3))
+#define ALIGN_UP_8(addr)      ((__typeof__(addr))(((uintptr_t)(addr) + 7) & ~7))
+#define ALIGN_UP(addr, len)   ((__typeof__(addr))(((uintptr_t)(addr) + len - 1) & ~(len - 1)))
+#define ALIGN_DOWN(addr, len) ((__typeof__(addr))(((uintptr_t)(addr)) & ~(len - 1)))
+
+#define LOWBIT(x)  (x & -x)
+#define SWAP(a, b) a ^= b ^= a ^= b
 
 #ifdef DEBUG
 #define DBG_PRINTF(fmt, ...) printf("[DEBUG %s] " fmt, __func__, ##__VA_ARGS__)
 #else
-#define DBG_PRINTF(fmt, ...) \
-    do {                     \
+#define DBG_PRINTF(...)          \
+    do {                         \
+        if (0) {                 \
+            printf(__VA_ARGS__); \
+        }                        \
     } while (0)
 #endif // DEBUG
 
@@ -39,7 +46,6 @@ static inline void write_BE64(uint8_t *dest, uint64_t val) {
 }
 
 static inline uint8_t __ffs64(uint64_t word) { return __builtin_ctzll(word); }
-
 static inline uint8_t __fls64(uint64_t word) { return 63 - __builtin_clzll(word); }
 
 #endif // !_UTILS_H_

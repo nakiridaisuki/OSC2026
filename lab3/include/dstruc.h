@@ -5,18 +5,18 @@
 
 #define container_of(nodeptr, type, member) ((type *)((char *)nodeptr - offsetof(type, member)))
 
-typedef struct _linked_list_node LINKED_LIST_NODE;
+typedef struct _linked_list_node LinkedListNode;
 struct _linked_list_node {
-    LINKED_LIST_NODE *prev, *next;
+    LinkedListNode *prev, *next;
 };
 
-inline static int lln_init(LINKED_LIST_NODE *node) {
+inline static int lln_init(LinkedListNode *node) {
     if (node == NULL)
         return 1;
     node->prev = node->next = node;
     return 0;
 }
-inline static int lln_add(LINKED_LIST_NODE *head, LINKED_LIST_NODE *node) {
+inline static int lln_add(LinkedListNode *head, LinkedListNode *node) {
     if (node == NULL || head == NULL)
         return 1;
     node->next       = head->next;
@@ -25,7 +25,7 @@ inline static int lln_add(LINKED_LIST_NODE *head, LINKED_LIST_NODE *node) {
     head->next       = node;
     return 0;
 }
-inline static int lln_remove(LINKED_LIST_NODE *node) {
+inline static int lln_remove(LinkedListNode *node) {
     if (node == NULL)
         return 1;
     node->prev->next = node->next;

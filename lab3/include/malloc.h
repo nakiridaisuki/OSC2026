@@ -10,33 +10,33 @@
 #define MAX_ORDER  64
 #define SLAB_COUNT 8 // 16, 32, 64, 128, 256, 512, 1024, 2048
 
-typedef struct _page PAGE;
+typedef struct _page Page;
 struct _page {
-    int order;
+    int8_t order;
     uint8_t zone;
-    union {
-        uint8_t allocated;
-        uint8_t slab_count;
-    };
+    uint8_t allocated;
+    uint16_t slab_count;
     uint16_t slab_size;
     void *slab_head;
-    LINKED_LIST_NODE list;
+    LinkedListNode list;
 };
 
 typedef struct {
     phys_addr_t mem_start;
     phys_addr_t mem_size;
-    PAGE *pages_arr;
+    Page *pages_arr;
     uint32_t arr_size;
 } MemZone;
 
 void init_malloc(uint8_t *fdt_ptr);
-void init_palloc();
-void init_dalloc();
-uint8_t *palloc(uint64_t bytes);
-void pfree(PAGE *page);
-uint8_t *dalloc(uint32_t bytes);
 uint8_t *malloc(uint64_t bytes);
 void free(uint8_t *mem_ptr);
+
+void init_palloc();
+uint8_t *palloc(uint64_t bytes);
+void pfree(Page *page);
+
+void init_dalloc();
+uint8_t *dalloc(uint32_t bytes);
 
 #endif // !_MALLOC_H_

@@ -45,7 +45,7 @@ FDTEvent fdt_next(FDTIterator *iter) {
         else if (token == FDT_BEGIN_NODE) {
             const char *node_name = (const char *)iter->cursor;
             iter->cursor += strlen(node_name) + 1;
-            iter->cursor = ALIGN_4(iter->cursor);
+            iter->cursor = ALIGN_UP_4(iter->cursor);
 
             iter->name = node_name;
             iter->depth++;
@@ -60,7 +60,7 @@ FDTEvent fdt_next(FDTIterator *iter) {
 
             iter->val = iter->cursor;
             iter->cursor += iter->len;
-            iter->cursor = ALIGN_4(iter->cursor);
+            iter->cursor = ALIGN_UP_4(iter->cursor);
 
             if (iter->strings != NULL)
                 iter->name = (const char *)(iter->strings + iter->nameoff);

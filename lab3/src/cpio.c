@@ -54,11 +54,11 @@ CPIOFile cpionewc_next_file(const char **ptr) {
 
     result.name = *ptr;
     *ptr += result.header.namesize;
-    *ptr = ALIGN_4(*ptr);
+    *ptr = ALIGN_UP_4(*ptr);
 
     result.data = *ptr;
     *ptr += result.header.filesize;
-    *ptr = ALIGN_4(*ptr);
+    *ptr = ALIGN_UP_4(*ptr);
 
     if (strcmp(result.name, "TRAILER!!!") == 0) {
         result.data = NULL;
