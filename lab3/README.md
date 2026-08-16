@@ -29,9 +29,6 @@ To implement this system, we first need a page array and a free list.
 The page array store the information of a page,
 like the chunk size, if it's a part of a chunk or is allocated.
 
-The free list is a linked list store free chunks of each size.
-The number of free lists if $O(logn)$.
-
 ```c
 struct Page {
     int8_t order; // >=0 for chunk size, -1 for merged
@@ -40,11 +37,22 @@ struct Page {
 };
 ```
 
-The following pseudo code for allocator;
+The free list is a doubly circular linked list store free chunks of each size.
+The number of free lists if $O(logn)$.
+
+```text
+-> head0 <-> chunk <-> chunk ... chunk <-
+-> head1 <-> chunk ... chunk <-
+-> head2 <-
+...
+-> head63 <-> chunk <-> chunk ... chunk <-
+```
+
+The following pseudo code for allocator:
 
 ```python
 palloc(size) {
-    order <- min exp for 2^exp >= size.
+    order <- min exp for 4KB * 2^exp >= size.
     for i from order to MAX_ORDER:
         if free_list[i] is not empty:
             take a chunk C from free_list[i].
@@ -89,7 +97,7 @@ $100_2 xor 010_2 = 110_2$ \
 $110_2 xor 010_2 = 100_2$
 
 Using this method, we can get buddy chunk in $O(1)$ time and merge if we need.
-The following pseudo code for allocator;
+The following pseudo code for freeing page:
 
 ```python
 pfree(C) {
@@ -108,3 +116,97 @@ pfree(C) {
 ```
 
 This function can merge free chunks in $O(logn)$ time.
+
+## Basic Exercise 2
+
+Next exercise is about small (<4KB) memory allocation.
+
+Buddy system can solve external fragmentation but do nothing about internal fragmentation.
+The dynamic memory allocator will slice a page into fix size blocks pools (16, 32, 64 bytes, etc),
+and allocate memory from this pools.
+
+In this system I designed, each page will become a fix size blocks pool.
+If a page is assigned as a 32-byte pool, it will contain 4096/32 = 128 blocks.
+If it's a 256-byte pool, it will contain 4096/256 = 16 blocks... etc.
+
+The advantage is easy to implement,
+but the performance may worse then allocate different size in one page
+if there are only a few blocks needed for each size.
+
+To implement this, we need to add some data into the page structure.
+The "slab" means a block in the page.
+
+```c
+struct Page {
+    int8_t order;
+    uint8_t allocated;
+    LinkedListNode list;
+    uint16_t slab_count; // How many blocks have been used
+    uint16_t slab_size;  // The size of a block
+    void *slab_head;     // The block linked list head
+};
+```
+
+We also use linked list to store our free memory data,
+but this time, the data is stored inside the beginning of the unallocated memory region,
+not a separate memory region.
+
+```txt
+      __    __    __    __    __
+     /  \  /  \  /  \  /  \../  \
+| 16B | 16B | 16B | 16B | ... | 16B |
+\___________________________________/
+             4KB page
+```
+
+The following pseudo code for dynamic allocator:
+
+```python
+dalloc(size) {
+    order <- min exp for 16B * 2^exp >= size.
+
+    if no page left for current order:
+        P <- palloc(PAGE_SIZE)
+
+        P.slab_count <- 0
+        P.slab_size  <- 16 << order
+        P.slab_head  <- memory address of P
+
+        total_slabs <- 4069 / P.slab_size;
+        for i from 0 to total_slabs - 2:
+            save address of next slab into beginning of current slab.
+        add P into free_slabs[order].
+
+    avail_page <- page in free_slabs[order].
+    Take a slab S from avail_page.
+    avail_page.slab_count++;
+
+    if avail_page is full:
+        remove avail_page from free_slabs[order].
+
+    M <- real memory region of slab C.
+    return M
+}
+```
+
+The overall process is similar to page allocator but has a slabs initialization.
+
+The following process for freeing a slab:
+
+```python
+dfree(S) {
+    P <- page of slab S.
+    order <- P.slab_size / 16
+    if P is full:
+        add P back into free_slabs[order].
+
+    Add S back into P's slab list.
+
+    P.slab_count--;
+    if (P.slab_count == 0) {
+        P.slab_size = 0;
+        remove P from free_slabs[order].
+        pfree(P);
+    }
+}
+```
