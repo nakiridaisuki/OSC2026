@@ -1,203 +1,110 @@
-# Lab 2
+# Lab 3
 
-## Fix of Lab1
+## Basic Exercise 1 / Advance Exercise 1
 
-In `lab1.md` I said that the kernel starts from `0x80200000` on the board,
-but it's actually `0x00200000` since the board's memory starts from zero.
-So in the linker script, it should be fixed like this:
+In the first exercise, we need to build a buddy system and a page allocator base on it.
 
-```text
-SECTIONS
-{
-    /* Starting address */
-    . = 0x00200000;
-...
-}
-```
-
-And the `0x80200000` address is for the QEMU emulator, so there is a separate linker script for QEMU in this directory.
-
-## Makefile Architecture
-
-In this lab, we will have three different compile results for the real/qemu kernel and the bootloader.
-They have different source code and linker script, so I wrote three separate makefiles.
-The main `Makefile` looks like this:
-
-```makefile
-all:
- make -f Makefile.bootloader
- make -f Makefile.kernel
-
-bootloader:
- make -f Makefile.bootloader
-
-kernel:
- make -f Makefile.kernel
-
-qemu:
- make -f Makefile.qemu run
-
-test:
- make -f Makefile.test
-
-clean:
- rm -rf build
- rm *.fit
+The buddy system is a algorithm to solve the external fragment problem.
+It divides the memory region into power of 2 chunks. Looks like this:
 
 ```
-
-So you can build what you want using a command like `make <target>` or simply `make` for the kernel and bootloader.
-The `test` is for function testing on the host, and the `qemu` will run automatically after compilation.
-
-## Basic Exercise 1 / Advance Exercise
-
-In first exercise, we need to write a bootloader which can load real kernel via UART.
-The process of our bootloader is:
-
-```text
-U-boot 
--> our bootloader at 0x00200000 (load by uboot)
--> relocate to       0x02000000 (by bootloader_entry.S)
--> wait/receive kernel and write into 0x00200000
--> fence.i flash all data and instruction (really important!!)
--> jump to 0x00200000
+|                  32k                  |
+|        16k        |        16k        |
+|    8k   |    8K   |    8K   |    8K   |
+| 4K | 4k | 4K | 4k | 4K | 4k | 4K | 4k |
 ```
 
-In this process, we jump to new bootloader/kernel code two times (relocate and kernel).
-Before jumping, it's important to use `fence.i` to make sure every instruction and data will be read from new code region.
+(4K is the size of one page.)
 
-In `bootloader_entry.S`, we use `lla` to get the current start address in memory.
-To get desire starting address we defined in the linker script, we need to store it as a variable in our assembly.
+Every time a requester need some memory, the system will pick a minimum available chunk for it.
+The word "available" here means the chunk is large enough and in the *free list*.
+If the allocated chunk is too large for requester, the system will cut it in half and save the other half chunk into the *free list*.
+And keep do it until it can't.
+The advantage of this system is it can recycle the free small chunks and merge them into larger chunk
+since the chunk size is always the power of 2.
+[More information.](https://en.wikipedia.org/wiki/Buddy_system)
 
-```asm
-_link_start_ptr:
-    .quad _start_address
-_link_end_ptr:
-    .quad _end_address
-_relocation_done_ptr:
-    .quad relocation_done
-```
+To implement this system, we first need a page array and a free list.
 
-`.quad` will allocate an 8-byte area for data and the data will be filled by the linker.
-This data will be read like this:
+The page array store the information of a page,
+like the chunk size, if it's a part of a chunk or is allocated.
 
-```asm
-lla t4, _link_start_ptr
-ld t1, 0(t4)
-```
-
-Why we can't use the method like `lla` to load the desired memory address is because when we use `lla`,
-the compiler will expand it into `auipc` + `addi` to calculate relative distance from current position.
-(so as we use `la` with `--mcmodel=medany` flag)
-
-If we write something like this:
-
-```asm
-lla t1, _start_address
-```
-
-The relative distance between `_start_address` and `_start` symbol will always be 0.
-So `t1` will be current position, not the desired position.
-
-After copy the bootloader to `0x02000000`, a `fence.i` need to be added.
-`fence.i` can make sure all instructions and data after it be read from memory instead of cache.
-This instruction will flash both I-cache and D-cache.
-
-Our transmit protocol is very simple.
-Start with a magic number `0x544F4F42`, then a 32-bit integer for the file size, then the binary kernel file.
-After the bootloader started, we can sand our kernel using command like this:
-
-```shell
-sudo python send_kernel.py /dev/ttyUSB0 ./build/kernel/kernel.bin
-```
-
-The bootloader will put kernel at `0x00200000` and jump to it.
-But, how to jump to it?
-
-Function is a block of machine code in object files.
-When we call the function, we will 'jump' to the code block.
-And the function pointer is a pointer that store the beginning address of the function.
-
-We can cast the starting address to function pointer, and call the function.
-Then the compiler will compile it into jump instruction.
+The free list is a linked list store free chunks of each size.
+The number of free lists if $O(logn)$.
 
 ```c
-#define KERNEL_BASE 0x00200000
-// ...
-
-int main(){
-    // ...
-    unsigned char *load_addr = (unsigned char *)KERNEL_BASE;
-    // ...
-
-    void (*kernel_entry)() = (void (*)())load_addr;
-    kernel_entry();
-}
-```
-
-Cool isn't it?
-
-Using function call instead of manually jump has another advantage.
-The SBI will put flattened device tree pointer in `a1` register.
-Our bootloader will receive it, and we also need to do it for our kernel.
-Using function call can easily achieve it, just add some arguments into the function.
-Compiler will load data into register for us automatically.
-
-```c
-void (*kernel_entry)(unsigned long, const uint8_t *) =
-    (void (*)(unsigned long, const uint8_t *))load_addr;
-kernel_entry(hartid, fdt_ptr);
-```
-
-## Basic Exercise 2
-
-To parse the flattened device tree (FDT) files, I designed a state machine.
-Pass an iterator into it, it will return the node/property's data.
-My iterator structure looks like this:
-
-```c
-typedef struct {
-    const uint8_t *cursor;
-    const uint8_t *strings;
-    int depth;
-
-    const uint8_t *event_start;
-    const char *name;
-    const uint8_t *val;
-    uint32_t len;
-    uint32_t nameoff;
-} FDTIterator;
-```
-
-This architecture let us use one `fdt_next` function handle complete FDT parsing, and return a structured data.
-Then we can focus on what types of data we need in each functional function like `get_fdt_node` or `get_fdt_prop`.
-
-The main target of this exercise is get the UART base address from device tree.
-By the data from internet, the UART node path usually specified in property `stdout-path` under `/chosen` node.
-In the .dts of our lab, it looks like this:
-
-```text
-chosen {
-    bootargs = "earlycon=sbi console=ttyS0,115200n8 loglevel=8 swiotlb=65536 rdinit=/init";
-    stdout-path = "serial0:115200n8";
+struct Page {
+    int8_t order; // >=0 for chunk size, -1 for merged
+    uint8_t allocated;
+    LinkedListNode list; // for free list
 };
 ```
 
-The value separate by the colon, the front half is UART node name or aliases, the back half is UART setup data.
-If the node name doesn't start with `/`, that means this is a aliases, you should find the real path in `/aliases` node.
+The following pseudo code for allocator;
 
-In the `/aliases` node, we can get the real UART node path:
+```python
+palloc(size) {
+    order <- min exp for 2^exp >= size.
+    for i from order to MAX_ORDER:
+        if free_list[i] is not empty:
+            take a chunk C from free_list[i].
 
-```text
-aliases {
-    serial0 = "/soc/serial@d4017000";
-    ...
+    if didn't find C:
+        EXIT
+
+    while C.order > order:
+        R <- right half of chunk C.
+        L <- left  half of chunk C.
+        add R into free_list[C.order - 1].
+        C <- L.
+
+    M <- real memory region of chunk C.
+    return M
 }
 ```
 
-## Basic Exercise 3
+This function can allocate minimum available chunk in $O(logn)$ time.
 
-In this exercise, we need to implement a CPIO parser.
+How to free the page chunk is what buddy system truly valuable.
+We can use XOR to find the buddy chunk of current chunk.
+For example, the same graph as above but with page index this time:
 
-The CPIO parser is simple.
-The main problem now is the ramdisk data need to also be compiled into bootloader.
+```
+|0                                      |
+|0                  |4                  |
+|0        |2        |4        |6        |
+|0   |1   |2   |3   |4   |5   |6   |7   |
+```
+
+If page `0` and `1` need to merge. The chunk order is 0.
+For any page of them, the index XOR $2^0$ will become the other one's index.
+
+$0 xor 1 = 1$ \
+$1 xor 1 = 0$
+
+Another example, if two chunks page `4` and `6` with order 1 need to merge.
+The index need to XOR $2^1$:
+
+$100_2 xor 010_2 = 110_2$ \
+$110_2 xor 010_2 = 100_2$
+
+Using this method, we can get buddy chunk in $O(1)$ time and merge if we need.
+The following pseudo code for allocator;
+
+```python
+pfree(C) {
+    while C.order < MAX_ORDER - 1:
+        buddy_idx <- C.index ^ (1 << C.order)
+        B <- page_arr[buddy_idx]
+
+        if B.allocated || B.order != C.order:
+            break;
+
+        remove B from free_list[B.order].
+        C <- merged chunk of C and B.
+    }
+    add C into free_list[C.order].
+}
+```
+
+This function can merge free chunks in $O(logn)$ time.

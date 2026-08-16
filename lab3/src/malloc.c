@@ -69,10 +69,13 @@ static uint8_t _slab_order(uint32_t size) {
 static void _lock_mem(phys_addr_t start_addr, phys_addr_t size) {
     phys_addr_t end_addr = start_addr + size;
     start_addr           = start_addr & ~(PAGE_SIZE - 1);
+    DBG_PRINTF("[R] Reserve address [0x%lx, 0x%lx).\n", start_addr, end_addr);
     while (start_addr < end_addr) {
-        Page *page      = _mem2page((uint8_t *)(start_addr));
-        page->allocated = true;
+        Page *page = _mem2page((uint8_t *)(start_addr));
         start_addr += PAGE_SIZE;
+        if (page == NULL)
+            continue;
+        page->allocated = true;
     }
 }
 
@@ -197,7 +200,7 @@ uint8_t *palloc(uint64_t bytes) {
             lln_remove(free_pages[i].next);
 
             ALLOC_LOG(
-                "[-] Remove page %d from order %d. Range of pages: [%d, %d]\n",
+                "[-] Remove page %d from order %d. Range of pages: [%d, %d)\n",
                 avail_page - _pagearr_start(avail_page),
                 avail_page->order,
                 avail_page - _pagearr_start(avail_page),
@@ -219,7 +222,7 @@ uint8_t *palloc(uint64_t bytes) {
         lln_add(&free_pages[avail_page->order], &right_page->list);
 
         ALLOC_LOG(
-            "[+] Add page %d to order %d. Range of pages: [%d, %d]\n",
+            "[+] Add page %d to order %d. Range of pages: [%d, %d)\n",
             right_page - _pagearr_start(right_page),
             right_page->order,
             right_page - _pagearr_start(right_page),
