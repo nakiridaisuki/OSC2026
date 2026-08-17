@@ -1,9 +1,12 @@
 #include "shell.h"
 #include "cpio.h"
+#include "dstruc.h"
+#include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
 #include "uart.h"
+#include <stdint.h>
 
 typedef struct {
     const char *name;
@@ -87,6 +90,24 @@ int info(char *args) {
     check_extensions();
 
     return 0;
+}
+
+int test_mem(char *args) {
+    char *s_size = strtok(args, " ");
+
+    if (s_size == NULL) {
+        printf("ERROR: Can't get size.\n");
+        return 1;
+    }
+
+    uint32_t size = strtou32(s_size, NULL, 10);
+    uint8_t *ptr  = malloc(size);
+    if (ptr == NULL) {
+        printf("Out of Memory\n");
+    } else {
+        printf("Success allocate memory at 0x%lx\n", ptr);
+    }
+    return 1;
 }
 
 int shell() {

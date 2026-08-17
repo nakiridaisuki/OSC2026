@@ -114,7 +114,12 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     printf("initrd start address: 0x%p\n", CPIO_START_ADDR);
 
     init_malloc(fdt_ptr);
-    test_alloc_1();
+    // test_alloc_1();
+
+    // char *ptr;
+    // while ((ptr = malloc(4000)) != NULL) {
+    //     sprintf(ptr, "test\n");
+    // }
 
     shell();
 
