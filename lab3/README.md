@@ -210,3 +210,84 @@ dfree(S) {
     }
 }
 ```
+
+## Startup Allocation
+
+We have talked about how to implement memory allocation system.
+Next problem is where to store the metadata like `free_slabs`, `free_list` and `page_arr`.
+
+The `free_slabs` and `free_list` store the header node of linked lists.
+It only takes 16 bytes per node and has $O(logn)$ nodes so it's fine to declare it as a global variable and store in `.bss` section.
+
+However, the `page_arr` has 32 bytes per entity and has # of pages entities.
+If we have a 8GB memory, we will have 8G/4K = 2M pages.
+We can't declare it as a global variable since the size of total memory depended on the machine.
+And of course we don't have `malloc` before we initialize our allocator.
+
+Thus, we need a early allocator to allocate some memory for us.
+Here, I simply take the memory region after our kernel image, just like a heap starting at the stack "top".
+
+```txt
+ _____________ Our Kernel ________________
+/                                         \
+| .text | .bss, .data ... | ... stack ... | ....
+                                        ^   ^ -->
+                                stack top   start allocate here
+```
+
+We can use `extern` to get stack top address from linker script.
+The following code is my early allocator.
+
+```c
+extern uint8_t _stack_top[];
+phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
+
+static void *_early_alloc(uint32_t size) {
+    early_mem_ptr = ALIGN_UP_8(early_mem_ptr);
+    void *mem_ptr = (void *)early_mem_ptr;
+    early_mem_ptr += size;
+    return mem_ptr;
+}
+```
+
+Notice the wired declaration:
+
+```c
+extern uint8_t _stack_top[];
+```
+
+The `_stack_top` in linker script is a symbol of a address.
+We can't use `extern uint8_t *_stacktop;` since it will become a "variable" of a address.
+
+If we write the code like following:
+
+```c
+extern uint8_t *_stack_top;
+phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
+```
+
+The compiler will first find the address of `_stack_top` (which is the real stack top) and get the value from that address.
+For example, if the stack top address is `0x1000`, the result will become:
+
+```c
+phys_addr_t early_mem_ptr = (phys_addr_t)(*(0x1000));
+// maybe zero or some garbage data in 0x1000
+```
+
+By using the array declaration `[]`, the array name `_stack_top` will auto decay to beginning address of array;
+The other way to get memory address is use `&`:
+
+```c
+extern uint8_t _stack_top; // a variable
+phys_addr_t early_mem_ptr = (phys_addr_t)(&_stack_top);
+```
+
+## Reserved Memory & Memory Zone
+
+### Reserved Memory
+
+There are some memory region we can't allocate since they have been used or reserved.
+For example, the kernel image, DTB, ramdisk and reserved memory in DTB.
+
+We can allocate memory for them after initialized our allocator, but it will cause some internal fragmentation.
+The other way is reserving them before initialization and merge left pages using `pfree`.
