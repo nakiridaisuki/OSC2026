@@ -38,7 +38,7 @@ struct Page {
 ```
 
 The free list is a doubly circular linked list store free chunks of each size.
-The number of free lists if $O(logn)$.
+The number of free lists is $O(logn)$.
 
 ```text
 -> head0 <-> chunk <-> chunk ... chunk <-
@@ -291,3 +291,17 @@ For example, the kernel image, DTB, ramdisk and reserved memory in DTB.
 
 We can allocate memory for them after initialized our allocator, but it will cause some internal fragmentation.
 The other way is reserving them before initialization and merge left pages using `pfree`.
+
+### Memory Zone
+
+In OrangePi RV2, there are two memory node, the usable memory isn't continuous.
+To solve this problem, I design a memory zone structure:
+
+```c
+typedef struct {
+    phys_addr_t mem_start;
+    phys_addr_t mem_size;
+    Page *pages_arr;
+    uint32_t arr_size;
+} MemZone;
+```
