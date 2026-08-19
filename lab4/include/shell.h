@@ -2,12 +2,12 @@
 #define _SHELL_H_
 
 // (return type, name, arguments, description)
-#define SHELL_FUNC_LIST                                     \
-    X(ls, "list all files in ramdisk")                      \
-    X(cat, "print file's contant")                          \
-    X(hello, "print hello")                                 \
-    X(help, "print this help")                              \
-    X(test_mem, "test_mem <size>: malloc <size> MB memory") \
+#define SHELL_FUNC_LIST                                              \
+    X(ls, "list all files in ramdisk")                               \
+    X(cat, "print file's contant")                                   \
+    X(hello, "print hello")                                          \
+    X(help, "print this help")                                       \
+    X(timeout, "timeout <num> <text>: show <text> after <num> sec.") \
     X(info, "print SBI information")
 
 #define X(name, desc) int name(char *args);

@@ -1,11 +1,14 @@
 #include "cpio.h"
+#include "dtb.h"
 #include "include/sbi.h"
 #include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
 #include "shell.h"
+#include "timer.h"
 #include "trap.h"
 #include "uart.h"
+#include "utils.h"
 #include <stdint.h>
 
 static char user_stack[4096];
@@ -47,16 +50,10 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     printf("Malloc initialized\n");
 
     init_trap();
-    asm volatile("csrs sstatus, 2");
     printf("Trap initialized\n");
 
-    // exec(fake_user);
-
-    uint64_t curr_time;
-    asm volatile("rdtime %0" : "=r"(curr_time));
-    printf("Current time is %lu\n", curr_time);
-
-    sbi_set_timer(curr_time + 0x16e3600);
+    init_timer(fdt_ptr);
+    printf("Timer initialized\n");
 
     shell();
 

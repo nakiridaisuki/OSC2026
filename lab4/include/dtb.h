@@ -87,6 +87,13 @@ static inline uint64_t fdt_read_u64_save(FDTProp prop, uint64_t default_val) {
         return default_val;
     return BE_uint64(prop.val_ptr);
 }
+static inline uint64_t fdt_read_num_save(FDTProp prop, uint64_t default_val) {
+    if (prop.val_ptr == NULL)
+        return default_val;
+    if (prop.len == 4)
+        return BE_uint32(prop.val_ptr);
+    return BE_uint64(prop.val_ptr);
+}
 void fdt_list_all_props(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt);
 void fdt_list_all_subnodes(const uint8_t *dt_struct_ptr);
 

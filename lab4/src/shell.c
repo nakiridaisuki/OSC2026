@@ -1,12 +1,14 @@
 #include "shell.h"
 #include "cpio.h"
 #include "dstruc.h"
-#include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
+#include "timer.h"
 #include "uart.h"
+#include "utils.h"
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef struct {
     const char *name;
@@ -92,22 +94,33 @@ int info(char *args) {
     return 0;
 }
 
-int test_mem(char *args) {
-    char *s_size = strtok(args, " ");
+void _timeout_cb(void *arg) {
+    char *str = (char *)arg;
+    printf("%s\n", str);
+    free(str);
+}
 
-    if (s_size == NULL) {
-        printf("ERROR: Can't get size.\n");
+int timeout(char *args) {
+    char *str;
+    char *time_s = strtok_r(args, " ", &str);
+
+    if (time_s == NULL) {
+        printf("ERROR: Didn't set time.\n");
         return 1;
     }
+    if (str == NULL)
+        str = "";
 
-    uint32_t size = strtou32(s_size, NULL, 10);
-    uint8_t *ptr  = malloc(size);
-    if (ptr == NULL) {
-        printf("Out of Memory\n");
-    } else {
-        printf("Success allocate memory at 0x%lx\n", ptr);
-    }
-    return 1;
+    char *buf = malloc(strlen(str) + 1);
+    strcpy(buf, str);
+
+    uint32_t delay_s = strtou32(time_s, NULL, 10);
+    Timer *timer     = malloc(sizeof(Timer));
+    add_timer(timer, delay_s * 1000, _timeout_cb, buf);
+
+    printf("Timer added\n");
+
+    return 0;
 }
 
 int shell() {
