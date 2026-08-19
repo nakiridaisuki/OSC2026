@@ -2,6 +2,7 @@
 #include "printf.h"
 #include "string.h"
 #include <stddef.h>
+#include <stdint.h>
 
 struct sbiret sbi_ecall(
     unsigned long ext,
@@ -38,8 +39,13 @@ struct sbiret sbi_ecall(
     struct sbiret func_name(void) { return sbi_ecall(SBI_EXT_BASE, fid, 0, 0, 0, 0, 0, 0); }
 BASE_FID_LIST
 #undef X
+
 struct sbiret sbi_probe_extension(long eid) {
     return sbi_ecall(SBI_EXT_BASE, BASE_PROBE_EXTENSION, eid, 0, 0, 0, 0, 0);
+}
+
+struct sbiret sbi_set_timer(uint64_t stime_value) {
+    return sbi_ecall(0x00, 0, stime_value, 0, 0, 0, 0, 0);
 }
 
 struct sbiret sbi_warm_reboot(void) {

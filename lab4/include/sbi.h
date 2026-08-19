@@ -2,6 +2,7 @@
 #define _SBI_H_
 
 // X(EID, name, description)
+#include <stdint.h>
 #define SBI_EXT_LIST                                                    \
     X(0x00000010, SBI_EXT_BASE, "Base Extension")                       \
     X(0x54494D45, SBI_EXT_TIME, "Timer Extension")                      \
@@ -62,7 +63,7 @@ struct sbiret sbi_ecall(
 BASE_FID_LIST
 #undef X
 struct sbiret sbi_probe_extension(long eid);
-
+struct sbiret sbi_set_timer(uint64_t stime_value);
 struct sbiret sbi_warm_reboot(void);
 
 ///////////////////////// Utils Functions /////////////////////////
