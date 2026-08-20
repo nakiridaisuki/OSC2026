@@ -35,6 +35,14 @@
 
 #include "printf.h"
 #include "uart.h"
+#include "sbi.h"
+
+void _putchar(char c){
+    if (UART_INIT_DONE) 
+        uart_putchar(c);
+    else
+        sbi_putchar(c);
+}
 
 
 // define this globally (e.g. gcc -DPRINTF_INCLUDE_CONFIG_H ...) to include the

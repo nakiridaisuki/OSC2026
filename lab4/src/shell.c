@@ -167,7 +167,7 @@ int shell() {
 
         if (!matched && strlen(buf) > 0) {
             printf("Unknow command: ");
-            printf("%s", buf);
+            printf("%s (%d)", buf, strlen(buf));
             printf("\n");
         }
     }

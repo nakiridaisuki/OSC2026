@@ -1,10 +1,59 @@
 #include "uart.h"
 #include "dtb.h"
+#include "printf.h"
 #include "string.h"
+#include "trap.h"
+#include "utils.h"
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 
 uint64_t UART_CLK       = 14750000;
 uint64_t UART_BASE      = 0x10000000;
 uint32_t UART_REG_SHIFT = 0;
+uint32_t UART_IRQ;
+
+bool UART_INIT_DONE = false;
+
+typedef struct {
+    phys_addr_t base_addr;
+    uint32_t clock;
+    uint32_t reg_shift;
+    uint32_t baudrate;
+    uint32_t interrupts;
+    uint8_t parity;
+    uint8_t bits;
+    uint8_t enable_flow_ctrl;
+    uint8_t enable_fifo;
+} UARTInit;
+
+enum {
+    PARITY_NO   = 0,
+    PARITY_ODD  = 1,
+    PARITY_EVEN = 2,
+};
+
+#define RX_BUF_SIZE 256
+
+static char rx_buffer[RX_BUF_SIZE];
+static int rx_buf_head = 0;
+static int rx_buf_tail = 0;
+
+void rx_buf_push(char c) {
+    int next = (rx_buf_head + 1) % RX_BUF_SIZE;
+    if (next != rx_buf_tail) {
+        rx_buffer[rx_buf_head] = c;
+        rx_buf_head            = next;
+    }
+}
+
+int rx_buf_pop(char *c) {
+    if (rx_buf_head == rx_buf_tail)
+        return 0;
+    *c          = rx_buffer[rx_buf_tail];
+    rx_buf_tail = (rx_buf_tail + 1) % RX_BUF_SIZE;
+    return 1;
+}
 
 UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
@@ -95,42 +144,57 @@ UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
     }
     uart_info.clock = fdt_read_u32_save(clock, uart_info.clock);
 
+    FDTProp intr         = GET_PATH_PROP(uart_path, "interrupts");
+    uart_info.interrupts = BE_uint32(intr.val_ptr);
+
     return uart_info;
 }
 
 void uart_init_from_fdt(const uint8_t *fdt_ptr) {
     /*
      * TODOs
-     * 1. bits setting
-     * 2. flow control setting
-     * 2.
+     * refactor init from fdt
      */
-    UARTInit init_data = _get_info_from_fdt(fdt_ptr);
+    UARTInit init_data    = _get_info_from_fdt(fdt_ptr);
+    init_data.enable_fifo = true;
 
     UART_CLK       = init_data.clock;
     UART_BASE      = init_data.base_addr;
     UART_REG_SHIFT = init_data.reg_shift;
-
-    unsigned int divisor = (UART_CLK + (init_data.baudrate * 8)) / (init_data.baudrate * 16);
-    unsigned char dll    = divisor & 0xff;
-    unsigned char dlh    = (divisor >> 8) & 0xff;
+    UART_IRQ       = init_data.interrupts;
 
     // Disable all interrupt and enable UART unit
     write_reg(UART_IER, 0x40); // UUE at bit 6
 
     if (init_data.enable_fifo) {
-        write_reg(UART_FCR, 0x07);
+        set_reg(UART_IER, 1);        // enable receive intr
+        set_reg(UART_IER, (1 << 4)); // enable receiver timeout intr
+
+        set_reg(UART_LCR, 0x80);
+        write_reg(UART_FCR, 0x07 | 0x40);
+        clear_reg(UART_LCR, 0x80);
+
+        write_reg(UART_MCR, 0x08);
+
+        PLIC_SET_PRIO(init_data.interrupts, 1);
+        PLIC_SET_PRIO_THLD(1, 0);
+        PLIC_ENABLE(1, init_data.interrupts);
     } else {
         write_reg(UART_FCR, 0x06); // reset transmit/receive FIFO at bit 1, 2
         write_reg(UART_FCR, 0x00); // disable FIFO
     }
 
     // Setting Baud Rate
-    write_reg(UART_LCR, read_reg(UART_LCR) | 0x80);
+    unsigned int divisor = (UART_CLK + (init_data.baudrate * 8)) / (init_data.baudrate * 16);
+    unsigned char dll    = divisor & 0xff;
+    unsigned char dlh    = (divisor >> 8) & 0xff;
+    set_reg(UART_LCR, 0x80);
     write_reg(UART_DLL, dll);
     write_reg(UART_DLH, dlh);
     // Setting 8N1 data format
     write_reg(UART_LCR, 0x03);
+
+    UART_INIT_DONE = true;
 }
 
 void uart_putchar(char c) {
@@ -147,10 +211,24 @@ void uart_putchar(char c) {
 }
 
 char uart_getchar() {
-    while ((read_reg(UART_LSR) & LSR_DR) == 0) {
-    }
+    char c;
+    while (!rx_buf_pop(&c))
+        asm volatile("wfi");
+    return c;
+}
 
-    return read_reg(UART_RBR) & 0xff;
+void uart_intr_handle() {
+    uint32_t iir = read_reg(UART_IIR);
+
+    printf("IIR is 0x%x\n", iir);
+
+    // rx fifo full or timeout
+    if ((iir & 0xf) == 0x4 || (iir & 0xf) == 0xc) {
+        while ((read_reg(UART_LSR) & LSR_DR)) {
+            char c = (char)(read_reg(UART_RBR));
+            rx_buf_push(c);
+        }
+    }
 }
 
 int uart_getuint32() {
