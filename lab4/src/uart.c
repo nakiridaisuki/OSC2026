@@ -1,5 +1,6 @@
 #include "uart.h"
 #include "cpio.h"
+#include "dstruc.h"
 #include "dtb.h"
 #include "string.h"
 #include "trap.h"
@@ -27,27 +28,12 @@ enum {
     PARITY_EVEN = 2,
 };
 
-#define RX_BUF_SIZE 256
+#define BUF_SIZE 256
 
-static char rx_buffer[RX_BUF_SIZE];
-static int rx_buf_head = 0;
-static int rx_buf_tail = 0;
-
-void rx_buf_push(char c) {
-    int next = (rx_buf_head + 1) % RX_BUF_SIZE;
-    if (next != rx_buf_tail) {
-        rx_buffer[rx_buf_head] = c;
-        rx_buf_head            = next;
-    }
-}
-
-int rx_buf_pop(char *c) {
-    if (rx_buf_head == rx_buf_tail)
-        return 0;
-    *c          = rx_buffer[rx_buf_tail];
-    rx_buf_tail = (rx_buf_tail + 1) % RX_BUF_SIZE;
-    return 1;
-}
+static char _rx_buf[BUF_SIZE];
+static char _tx_buf[BUF_SIZE];
+static RingBuffer rx_ring_buf;
+static RingBuffer tx_ring_buf;
 
 UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
@@ -182,38 +168,57 @@ void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo) {
         set_reg(UART_LCR, (1 << 3) | ((init_data.parity == PARITY_EVEN) << 4));
     clear_reg(UART_LCR, 4);
 
+    // init fifo buffer
+    ring_buf_init(_rx_buf, BUF_SIZE, &rx_ring_buf);
+    ring_buf_init(_tx_buf, BUF_SIZE, &tx_ring_buf);
+
     UART_INIT_DONE = true;
 }
 
 void uart_putchar(char c) {
-    while ((read_reg(UART_LSR) & LSR_TDRQ) == 0) {
-    }
+    while (ring_buf_full(&tx_ring_buf))
+        asm volatile("wfi");
 
     if (c == '\n') {
-        write_reg(UART_THR, (unsigned int)'\r');
-        while ((read_reg(UART_LSR) & LSR_TDRQ) == 0) {
-        }
+        ring_buf_push('\r', &tx_ring_buf);
+        set_reg(UART_IER, 2); // enable transmit intr
+        while (ring_buf_full(&tx_ring_buf))
+            asm volatile("wfi");
     }
-
-    write_reg(UART_THR, (unsigned int)c);
+    ring_buf_push(c, &tx_ring_buf);
+    set_reg(UART_IER, 2); // enable transmit intr
 }
 
 char uart_getchar() {
     char c;
-    while (!rx_buf_pop(&c))
+    while (!ring_buf_pop(&c, &rx_ring_buf))
         asm volatile("wfi");
     return c;
 }
 
 void uart_intr_handle() {
     uint32_t iir = read_reg(UART_IIR);
+    iir &= 0xf;
 
-    // rx fifo full or timeout
-    if ((iir & 0xf) == 0x4 || (iir & 0xf) == 0xc) {
+    if (iir & 1) // no interrupt is pending
+        return;
+
+    // rx fifo avail or timeout
+    if (iir == 0x4 || iir == 0xc) {
         while ((read_reg(UART_LSR) & LSR_DR)) {
             char c = (char)(read_reg(UART_RBR));
-            rx_buf_push(c);
+            ring_buf_push(c, &rx_ring_buf);
         }
+    }
+
+    // tx fifo avail
+    if (iir == 0x2) {
+        char c;
+        while ((read_reg(UART_LSR) & LSR_TDRQ) && ring_buf_pop(&c, &tx_ring_buf))
+            write_reg(UART_THR, (unsigned int)c);
+
+        if (ring_buf_empty(&tx_ring_buf)) // no data need to transmit
+            clear_reg(UART_IER, 2);       // disable transmit intr
     }
 }
 
