@@ -1,5 +1,7 @@
 #include "printf.h"
+#include "trap.h"
 #include "uart.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 #define MAGIC_NUM   0x544F4F42
@@ -27,8 +29,21 @@ void waiting_magic_num() {
     }
 }
 
+int uart_getuint32() {
+    int result = 0;
+    for (int i = 0; i < 4; i++) {
+        char tmp = uart_getchar();
+        result |= (tmp & 0xff) << (8 * i);
+    }
+    return result;
+}
+
 void main(unsigned long hartid, const uint8_t *fdt_ptr) {
-    uart_init_from_fdt(fdt_ptr);
+    init_trap(fdt_ptr);
+    printf("Trap initialized\n");
+
+    init_uart(fdt_ptr, true);
+    printf("Init uart\n");
 
     unsigned long current_pc;
     asm volatile("auipc %0, 0" : "=r"(current_pc));

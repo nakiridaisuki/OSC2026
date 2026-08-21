@@ -9,7 +9,7 @@
 uint64_t HZ_PER_SEC;
 Timer TIMER_LIST_HEAD;
 
-void init_timer(uint8_t *fdt_ptr) {
+void init_timer(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
     const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
     const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;

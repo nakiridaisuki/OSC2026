@@ -1,10 +1,8 @@
 #include "uart.h"
-#include "cpio.h"
 #include "dstruc.h"
 #include "dtb.h"
 #include "string.h"
 #include "trap.h"
-#include "utils.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -221,13 +219,4 @@ void uart_intr_handle() {
                 clear_reg(UART_IER, 2);       // disable transmit intr
         }
     }
-}
-
-int uart_getuint32() {
-    int result = 0;
-    for (int i = 0; i < 4; i++) {
-        char tmp = uart_getchar();
-        result |= (tmp & 0xff) << (8 * i);
-    }
-    return result;
 }

@@ -10,6 +10,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define PAGE_SIZE  4096
+#define MIN_SLAB   16
+#define MAX_ORDER  32
+#define SLAB_COUNT 8 // 16, 32, 64, 128, 256, 512, 1024, 2048
+
 extern uint8_t _stack_top[];
 extern uint8_t _start[];
 phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
@@ -23,7 +28,7 @@ bool __malloc_init_done;
     } while (0)
 
 uint8_t total_zones;
-MemZone zones[64];
+MemZone zones[8];
 LinkedListNode free_pages[MAX_ORDER];
 LinkedListNode free_slabs[SLAB_COUNT];
 
@@ -111,7 +116,7 @@ static void _cb_mem(const uint8_t *node_ptr, const char *node_name, void *dt_str
     }
 }
 
-void init_malloc(uint8_t *fdt_ptr) {
+void init_malloc(const uint8_t *fdt_ptr) {
     __malloc_init_done = false;
 
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
@@ -291,7 +296,7 @@ void pfree(Page *page) {
 }
 
 void init_dalloc() {
-    for (size_t i = 0; i < MAX_ORDER; i++)
+    for (size_t i = 0; i < SLAB_COUNT; i++)
         lln_init(&free_slabs[i]);
 }
 

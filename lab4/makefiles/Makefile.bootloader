@@ -2,6 +2,8 @@ TARGET := bootloader
 
 OBJ_DIR := ./build/$(TARGET)
 LINKER  := linkers/linker.$(TARGET).ld
-OBJS    := bootloader.o bootloader_entry.o string.o uart.o printf.o dtb.o utils.o
+OBJS    := bootloader.o bootloader_entry.o string.o uart.o printf.o sbi.o dtb.o utils.o cpio.o shell.o malloc.o trap_entry.o trap.o timer.o
+
+CFLAGS := -march=rv64gc_zbb
 
 include ../common/common.mk

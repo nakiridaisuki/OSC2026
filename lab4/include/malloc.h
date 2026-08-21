@@ -5,11 +5,6 @@
 #include "types.h"
 #include <stdint.h>
 
-#define PAGE_SIZE  4096
-#define MIN_SLAB   16
-#define MAX_ORDER  64
-#define SLAB_COUNT 8 // 16, 32, 64, 128, 256, 512, 1024, 2048
-
 typedef struct _page Page;
 struct _page {
     int8_t order;
@@ -28,7 +23,7 @@ typedef struct {
     uint32_t arr_size;
 } MemZone;
 
-void init_malloc(uint8_t *fdt_ptr);
+void init_malloc(const uint8_t *fdt_ptr);
 uint8_t *malloc(uint64_t bytes);
 void free(uint8_t *mem_ptr);
 

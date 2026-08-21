@@ -26,7 +26,7 @@ extern Timer TIMER_LIST_HEAD;
 #define MIN_TIMER              container_of(TIMER_LIST_HEAD.list.prev, Timer, list)
 #define MAX_TIMER              container_of(TIMER_LIST_HEAD.list.next, Timer, list)
 
-void init_timer(uint8_t *fdt);
+void init_timer(const uint8_t *fdt);
 void add_timer(Timer *timer, uint64_t delay_ms, timer_cb_t callback, void *arg);
 
 #endif // !_TIMER_H_

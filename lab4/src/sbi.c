@@ -75,8 +75,3 @@ void check_extensions() {
 }
 
 void sbi_putchar(char ch) { sbi_ecall(1, 0, ch, 0, 0, 0, 0, 0); }
-void sbi_puts(char *str) {
-    while (*str) {
-        sbi_putchar(*str++);
-    }
-}
