@@ -1,6 +1,7 @@
 #include "timer.h"
 #include "dstruc.h"
 #include "dtb.h"
+#include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
 #include "trap.h"
@@ -8,6 +9,19 @@
 
 uint64_t HZ_PER_SEC;
 Timer TIMER_LIST_HEAD;
+
+static void timer_intr_handler(uintptr_t sepc, uintptr_t stval, void *context) {
+    uint64_t now = __rdtime();
+    while (MIN_TIMER != &TIMER_LIST_HEAD && MIN_TIMER->expires <= now) {
+        Timer *timer = MIN_TIMER;
+        lln_remove(&timer->list);
+
+        if (timer->callback)
+            timer->callback(timer->arg);
+        free(timer);
+    }
+    sbi_set_timer(MIN_TIMER->expires);
+}
 
 void init_timer(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
@@ -27,6 +41,7 @@ void init_timer(const uint8_t *fdt_ptr) {
     TIMER_LIST_HEAD.expires  = -1;
     TIMER_LIST_HEAD.callback = TIMER_LIST_HEAD.arg = NULL;
     lln_init(&TIMER_LIST_HEAD.list);
+    register_local_intr(5, timer_intr_handler);
 }
 
 void add_timer(Timer *timer, uint64_t delay_ms, timer_cb_t callback, void *arg) {

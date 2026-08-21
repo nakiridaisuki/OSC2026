@@ -2,7 +2,6 @@
 #include "cpio.h"
 #include "dstruc.h"
 #include "dtb.h"
-#include "printf.h"
 #include "string.h"
 #include "types.h"
 #include "utils.h"
@@ -154,7 +153,7 @@ uint8_t *malloc(uint64_t bytes) {
     return palloc(bytes);
 }
 
-void free(uint8_t *ptr) {
+void free(void *ptr) {
     phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
     Page *page          = _mem2page((uint8_t *)mem_ptr);
     if (page == NULL)

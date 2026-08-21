@@ -40,6 +40,4 @@ void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo);
 void uart_putchar(char c);
 char uart_getchar();
 
-void uart_intr_handle();
-
 #endif // !_UART_H_

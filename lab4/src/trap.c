@@ -1,24 +1,35 @@
 #include "trap.h"
-#include "cpio.h"
-#include "dstruc.h"
-#include "dtb.h"
 #include "printf.h"
 #include "sbi.h"
-#include "timer.h"
-#include "uart.h"
+#include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 
-phys_addr_t PLIC_BASE;
+#define MAX_LOCAL_INTR 16
+#define MAX_EXCEPTIONS 64
 
-void init_trap(const uint8_t *fdt_ptr) {
-    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
-    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
-    FDTProp reg =
-        fdt_find_prop_by_path(dt_struct_ptr, dt_strings_ptr, "/soc/interrupt-controller", "reg");
-    PLIC_BASE = fdt_read_u64_save(reg, 0);
+static trap_handler_t local_intr_table[MAX_LOCAL_INTR];
+static trap_handler_t exception_table[MAX_EXCEPTIONS];
 
+static void default_handler(uintptr_t sepc, uintptr_t stval, void *context) {
+    uint64_t scause;
+    asm volatile("csrr %0, scause" : "=r"(scause));
+    printf(
+        "[ERROR] Unhandled trap! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n", scause, sepc, stval
+    );
+    while (1) {
+    }
+}
+
+void register_local_intr(uint32_t code, trap_handler_t handler) {
+    if (code < MAX_LOCAL_INTR)
+        local_intr_table[code] = handler;
+}
+void register_exception(uint32_t code, trap_handler_t handler) {
+    if (code < MAX_EXCEPTIONS)
+        exception_table[code] = handler;
+}
+
+void init_trap() {
     // set trap handler enter point
     asm volatile("csrw stvec, %0" : : "r"((uint64_t)trap_entry));
 
@@ -34,6 +45,11 @@ void init_trap(const uint8_t *fdt_ptr) {
 
     // enable supervisor external intr (SEIE)
     asm volatile("csrs sie, %0" ::"r"(1UL << 9));
+
+    for (size_t i = 0; i < MAX_LOCAL_INTR; i++)
+        local_intr_table[i] = default_handler;
+    for (size_t i = 0; i < MAX_EXCEPTIONS; i++)
+        exception_table[i] = default_handler;
 }
 
 void trap_handler(TrapFrame *tf) {
@@ -49,45 +65,8 @@ void trap_handler(TrapFrame *tf) {
 
     if (scause & (1ULL << 63)) { // interrupt
         scause ^= (1ULL << 63);
-
-        if (scause == 5) { // timer interrupt
-            uint64_t now = __rdtime();
-            while (MIN_TIMER != &TIMER_LIST_HEAD && MIN_TIMER->expires <= now) {
-                Timer *timer = MIN_TIMER;
-                lln_remove(&timer->list);
-
-                if (timer->callback)
-                    timer->callback(timer->arg);
-
-                free(timer);
-            }
-            sbi_set_timer(MIN_TIMER->expires);
-        } else if (scause == 9) { // external interrupt
-            while (1) {
-                uint32_t irq = PLIC_CLAME(1);
-                if (irq == 0)
-                    break;
-
-                if (irq == UART_IRQ) {
-                    uart_intr_handle();
-                } else {
-                    printf("Unknow irq 0x%x\n", irq);
-                    while (1) {
-                    }
-                }
-
-                PLIC_COMPLETE(1, irq);
-            }
-        } else
-            while (1) {
-            }
-
+        local_intr_table[scause](sepc, stval, NULL);
     } else { // exception
-        if (scause == 8) {
-            tf->sepc += 4;
-            printf("sepc += 4\n");
-        } else
-            while (1) {
-            }
+        exception_table[scause](sepc, stval, NULL);
     }
 }

@@ -25,7 +25,7 @@ typedef struct {
 
 void init_malloc(const uint8_t *fdt_ptr);
 uint8_t *malloc(uint64_t bytes);
-void free(uint8_t *mem_ptr);
+void free(void *mem_ptr);
 
 void init_palloc();
 uint8_t *palloc(uint64_t bytes);

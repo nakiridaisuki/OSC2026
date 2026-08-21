@@ -1,8 +1,8 @@
 #include "uart.h"
 #include "dstruc.h"
 #include "dtb.h"
+#include "plic.h"
 #include "string.h"
-#include "trap.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -121,6 +121,33 @@ UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
     return uart_info;
 }
 
+static void uart_intr_handle(uint32_t irq, void *context) {
+    while (1) {
+        uint32_t iir = read_reg(UART_IIR) & 0xf;
+
+        if (iir & 1) // no interrupt is pending
+            break;
+
+        // rx fifo avail or timeout
+        if (iir == 0x4 || iir == 0xc) {
+            while ((read_reg(UART_LSR) & LSR_DR)) {
+                char c = (char)(read_reg(UART_RBR));
+                ring_buf_push(c, &rx_ring_buf);
+            }
+        }
+
+        // tx fifo avail
+        if (iir == 0x2) {
+            char c;
+            while ((read_reg(UART_LSR) & LSR_TDRQ) && ring_buf_pop(&c, &tx_ring_buf))
+                write_reg(UART_THR, (unsigned int)c);
+
+            if (ring_buf_empty(&tx_ring_buf)) // no data need to transmit
+                clear_reg(UART_IER, 2);       // disable transmit intr
+        }
+    }
+}
+
 void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo) {
     /*
      * TODOs
@@ -141,9 +168,8 @@ void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo) {
 
         write_reg(UART_MCR, 0x08);
 
-        PLIC_SET_PRIO(UART_IRQ, 1);
-        PLIC_SET_PRIO_THLD(1, 0);
-        PLIC_ENABLE(1, UART_IRQ);
+        plic_enable(UART_IRQ, 1);
+        plic_register(UART_IRQ, uart_intr_handle, NULL);
     } else {
         write_reg(UART_FCR, 0x06); // reset transmit/receive FIFO at bit 1, 2
         write_reg(UART_FCR, 0x00); // disable FIFO
@@ -192,31 +218,4 @@ char uart_getchar() {
     while (!ring_buf_pop(&c, &rx_ring_buf))
         asm volatile("wfi");
     return c;
-}
-
-void uart_intr_handle() {
-    while (1) {
-        uint32_t iir = read_reg(UART_IIR) & 0xf;
-
-        if (iir & 1) // no interrupt is pending
-            break;
-
-        // rx fifo avail or timeout
-        if (iir == 0x4 || iir == 0xc) {
-            while ((read_reg(UART_LSR) & LSR_DR)) {
-                char c = (char)(read_reg(UART_RBR));
-                ring_buf_push(c, &rx_ring_buf);
-            }
-        }
-
-        // tx fifo avail
-        if (iir == 0x2) {
-            char c;
-            while ((read_reg(UART_LSR) & LSR_TDRQ) && ring_buf_pop(&c, &tx_ring_buf))
-                write_reg(UART_THR, (unsigned int)c);
-
-            if (ring_buf_empty(&tx_ring_buf)) // no data need to transmit
-                clear_reg(UART_IER, 2);       // disable transmit intr
-        }
-    }
 }
