@@ -9,6 +9,7 @@
 #include "trap.h"
 #include "uart.h"
 #include "utils.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 static char user_stack[4096];
@@ -46,7 +47,7 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_trap(fdt_ptr);
     printf("Trap initialized\n");
 
-    uart_init_from_fdt(fdt_ptr);
+    init_uart(fdt_ptr, true);
     printf("UART Initialized, base at 0x%lx\n", UART_BASE);
 
     cpionewc_init_from_fdt(fdt_ptr);

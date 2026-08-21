@@ -8,8 +8,8 @@
 extern bool UART_INIT_DONE;
 
 // UART base info
+extern phys_addr_t UART_BASE;
 extern uint64_t UART_CLK;
-extern uint64_t UART_BASE;
 extern uint32_t UART_REG_SHIFT;
 extern uint32_t UART_IRQ;
 
@@ -36,7 +36,7 @@ extern uint32_t UART_IRQ;
 #define set_reg(offset, mask)   write_reg(offset, read_reg(offset) | (mask))
 #define clear_reg(offset, mask) write_reg(offset, read_reg(offset) & ~(mask))
 
-void uart_init_from_fdt(const uint8_t *fdt_ptr);
+void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo);
 void uart_putchar(char c);
 char uart_getchar();
 int uart_getuint32();
