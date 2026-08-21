@@ -197,28 +197,29 @@ char uart_getchar() {
 }
 
 void uart_intr_handle() {
-    uint32_t iir = read_reg(UART_IIR);
-    iir &= 0xf;
+    while (1) {
+        uint32_t iir = read_reg(UART_IIR) & 0xf;
 
-    if (iir & 1) // no interrupt is pending
-        return;
+        if (iir & 1) // no interrupt is pending
+            break;
 
-    // rx fifo avail or timeout
-    if (iir == 0x4 || iir == 0xc) {
-        while ((read_reg(UART_LSR) & LSR_DR)) {
-            char c = (char)(read_reg(UART_RBR));
-            ring_buf_push(c, &rx_ring_buf);
+        // rx fifo avail or timeout
+        if (iir == 0x4 || iir == 0xc) {
+            while ((read_reg(UART_LSR) & LSR_DR)) {
+                char c = (char)(read_reg(UART_RBR));
+                ring_buf_push(c, &rx_ring_buf);
+            }
         }
-    }
 
-    // tx fifo avail
-    if (iir == 0x2) {
-        char c;
-        while ((read_reg(UART_LSR) & LSR_TDRQ) && ring_buf_pop(&c, &tx_ring_buf))
-            write_reg(UART_THR, (unsigned int)c);
+        // tx fifo avail
+        if (iir == 0x2) {
+            char c;
+            while ((read_reg(UART_LSR) & LSR_TDRQ) && ring_buf_pop(&c, &tx_ring_buf))
+                write_reg(UART_THR, (unsigned int)c);
 
-        if (ring_buf_empty(&tx_ring_buf)) // no data need to transmit
-            clear_reg(UART_IER, 2);       // disable transmit intr
+            if (ring_buf_empty(&tx_ring_buf)) // no data need to transmit
+                clear_reg(UART_IER, 2);       // disable transmit intr
+        }
     }
 }
 

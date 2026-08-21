@@ -63,18 +63,21 @@ void trap_handler(TrapFrame *tf) {
             }
             sbi_set_timer(MIN_TIMER->expires);
         } else if (scause == 9) { // external interrupt
-            uint32_t irq = PLIC_CLAME(1);
+            while (1) {
+                uint32_t irq = PLIC_CLAME(1);
+                if (irq == 0)
+                    break;
 
-            if (irq == UART_IRQ) {
-                uart_intr_handle();
-            } else {
-                printf("Unknow irq 0x%x\n", irq);
-                while (1) {
+                if (irq == UART_IRQ) {
+                    uart_intr_handle();
+                } else {
+                    printf("Unknow irq 0x%x\n", irq);
+                    while (1) {
+                    }
                 }
+
+                PLIC_COMPLETE(1, irq);
             }
-
-            PLIC_COMPLETE(1, irq);
-
         } else
             while (1) {
             }
