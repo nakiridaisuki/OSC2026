@@ -14,11 +14,6 @@
 #define MAX_ORDER  32
 #define SLAB_COUNT 8 // 16, 32, 64, 128, 256, 512, 1024, 2048
 
-extern uint8_t _stack_top[];
-extern uint8_t _start[];
-phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
-
-bool __malloc_init_done;
 #define ALLOC_LOG(...)               \
     do {                             \
         if (__malloc_init_done) {    \
@@ -26,10 +21,33 @@ bool __malloc_init_done;
         }                            \
     } while (0)
 
-uint8_t total_zones;
-MemZone zones[8];
-LinkedListNode free_pages[MAX_ORDER];
-LinkedListNode free_slabs[SLAB_COUNT];
+typedef struct {
+    int8_t order;
+    uint8_t zone;
+    uint8_t allocated;
+    uint16_t slab_count;
+    uint16_t slab_size;
+    void *slab_head;
+    LinkedListNode list;
+} Page;
+
+typedef struct {
+    phys_addr_t mem_start;
+    phys_addr_t mem_size;
+    Page *pages_arr;
+    uint32_t arr_size;
+} MemZone;
+
+extern uint8_t _stack_top[];
+extern uint8_t _start[];
+static phys_addr_t early_mem_ptr = (phys_addr_t)_stack_top;
+
+static bool __malloc_init_done;
+
+static uint8_t total_zones;
+static MemZone zones[8];
+static LinkedListNode free_pages[MAX_ORDER];
+static LinkedListNode free_slabs[SLAB_COUNT];
 
 static inline Page *_node2page(LinkedListNode *node_ptr) {
     return container_of(node_ptr, Page, list);
@@ -56,14 +74,14 @@ static void *_early_alloc(uint32_t size) {
     return mem_ptr;
 }
 
-static uint8_t _buddy_order(uint64_t size) {
+static inline uint8_t _buddy_order(uint64_t size) {
     uint64_t pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
     if (pages <= 1)
         return 0;
     return 64 - __builtin_clzll(pages - 1);
 }
 
-static uint8_t _slab_order(uint32_t size) {
+static inline uint8_t _slab_order(uint32_t size) {
     uint32_t slabs = (size + MIN_SLAB - 1) / MIN_SLAB;
     if (slabs <= 1)
         return 0;
@@ -115,87 +133,7 @@ static void _cb_mem(const uint8_t *node_ptr, const char *node_name, void *dt_str
     }
 }
 
-void init_malloc(const uint8_t *fdt_ptr) {
-    __malloc_init_done = false;
-
-    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
-    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
-    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
-
-    total_zones = 0;
-    fdt_foreach_subnode(dt_struct_ptr, _cb_mem, (void *)dt_strings_ptr);
-
-    init_palloc();
-    init_dalloc();
-
-    const uint8_t *reserved_mem = fdt_find_node_by_path(dt_struct_ptr, "/reserved-memory");
-    fdt_foreach_subnode(reserved_mem, _cb_rsvmem, (void *)dt_strings_ptr);
-
-    early_mem_ptr = ALIGN_UP(early_mem_ptr, PAGE_SIZE);
-    _lock_mem((phys_addr_t)_start, early_mem_ptr - (phys_addr_t)_start);
-    _lock_mem((phys_addr_t)fdt_ptr, fdt_header.totalsize);
-    _lock_mem(CPIO_START_ADDR, CPIO_END_ADDR - CPIO_START_ADDR);
-
-    for (size_t i = 0; i < total_zones; i++) {
-        for (size_t j = 0; j < zones[i].arr_size; j++) {
-            Page *page = &zones[i].pages_arr[j];
-            if (!page->allocated && page->order >= 0) {
-                pfree(page);
-            }
-        }
-    }
-    __malloc_init_done = true;
-}
-
-uint8_t *malloc(uint64_t bytes) {
-    if (bytes <= PAGE_SIZE / 2)
-        return dalloc(bytes);
-    return palloc(bytes);
-}
-
-void free(void *ptr) {
-    phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
-    Page *page          = _mem2page((uint8_t *)mem_ptr);
-    if (page == NULL)
-        return;
-    if (page->slab_size != 0) {
-        ALLOC_LOG("[CF] Free 0x%lx at order %d, page %d.\n", ptr, page->order, _pageidx(page));
-        if (page->slab_head == NULL) {
-            uint8_t order = _slab_order(page->slab_size);
-            lln_add(&free_slabs[order], &page->list);
-        }
-
-        *(void **)ptr   = page->slab_head;
-        page->slab_head = ptr;
-
-        page->slab_count--;
-        if (page->slab_count == 0) {
-            page->slab_size = 0;
-            lln_remove(&page->list);
-            pfree(page);
-        }
-    } else
-        pfree(page);
-}
-
-void init_palloc() {
-    for (size_t i = 0; i < MAX_ORDER; i++)
-        lln_init(&free_pages[i]);
-
-    for (size_t zid = 0; zid < total_zones; zid++) {
-        Page *pages      = zones[zid].pages_arr;
-        uint32_t arrsize = zones[zid].arr_size;
-        memset(pages, 0, sizeof(Page) * arrsize);
-        for (size_t j = 0; j < arrsize; j++) {
-            lln_init(&pages[j].list);
-            pages[j].order     = 0;
-            pages[j].zone      = zid;
-            pages[j].allocated = false;
-        }
-    }
-}
-
-uint8_t *palloc(uint64_t bytes) {
+static uint8_t *palloc(uint64_t bytes) {
     uint8_t order    = _buddy_order(bytes);
     Page *avail_page = NULL;
     for (size_t i = order; i < MAX_ORDER; i++) {
@@ -255,7 +193,7 @@ uint8_t *palloc(uint64_t bytes) {
     return mem_ptr;
 }
 
-void pfree(Page *page) {
+static void pfree(Page *page) {
     if (page->order < 0)
         return;
 
@@ -294,15 +232,10 @@ void pfree(Page *page) {
     ALLOC_LOG("[PF] Free 0x%lx at order %d, page %d.\n", page, page->order, _pageidx(page));
 }
 
-void init_dalloc() {
-    for (size_t i = 0; i < SLAB_COUNT; i++)
-        lln_init(&free_slabs[i]);
-}
-
-uint8_t *dalloc(uint32_t bytes) {
+static uint8_t *dalloc(uint32_t bytes) {
     uint8_t order = _slab_order(bytes);
 
-    // Allocate a new page for dynamic allocater
+    // Allocate a new page for dynamic allocator
     if (free_slabs[order].next == &free_slabs[order]) {
         uint8_t *new_mem_ptr = palloc(PAGE_SIZE);
         if (new_mem_ptr == NULL)
@@ -344,4 +277,82 @@ uint8_t *dalloc(uint32_t bytes) {
     );
 
     return slab_ptr;
+}
+
+void init_malloc(const uint8_t *fdt_ptr) {
+    __malloc_init_done = false;
+
+    FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
+    const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
+    const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
+
+    total_zones = 0;
+    fdt_foreach_subnode(dt_struct_ptr, _cb_mem, (void *)dt_strings_ptr);
+
+    // Init page allocator
+    for (size_t i = 0; i < MAX_ORDER; i++)
+        lln_init(&free_pages[i]);
+    for (size_t zid = 0; zid < total_zones; zid++) {
+        Page *pages      = zones[zid].pages_arr;
+        uint32_t arrsize = zones[zid].arr_size;
+        memset(pages, 0, sizeof(Page) * arrsize);
+        for (size_t j = 0; j < arrsize; j++) {
+            lln_init(&pages[j].list);
+            pages[j].order     = 0;
+            pages[j].zone      = zid;
+            pages[j].allocated = false;
+        }
+    }
+    // Init dynamic allocator
+    for (size_t i = 0; i < SLAB_COUNT; i++)
+        lln_init(&free_slabs[i]);
+
+    const uint8_t *reserved_mem = fdt_find_node_by_path(dt_struct_ptr, "/reserved-memory");
+    fdt_foreach_subnode(reserved_mem, _cb_rsvmem, (void *)dt_strings_ptr);
+
+    early_mem_ptr = ALIGN_UP(early_mem_ptr, PAGE_SIZE);
+    _lock_mem((phys_addr_t)_start, early_mem_ptr - (phys_addr_t)_start);
+    _lock_mem((phys_addr_t)fdt_ptr, fdt_header.totalsize);
+    _lock_mem(CPIO_START_ADDR, CPIO_END_ADDR - CPIO_START_ADDR);
+
+    for (size_t i = 0; i < total_zones; i++) {
+        for (size_t j = 0; j < zones[i].arr_size; j++) {
+            Page *page = &zones[i].pages_arr[j];
+            if (!page->allocated && page->order >= 0) {
+                pfree(page);
+            }
+        }
+    }
+    __malloc_init_done = true;
+}
+
+void *malloc(uint64_t bytes) {
+    if (bytes <= PAGE_SIZE / 2)
+        return dalloc(bytes);
+    return palloc(bytes);
+}
+
+void free(void *ptr) {
+    phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
+    Page *page          = _mem2page((uint8_t *)mem_ptr);
+    if (page == NULL)
+        return;
+    if (page->slab_size != 0) {
+        ALLOC_LOG("[CF] Free 0x%lx at order %d, page %d.\n", ptr, page->order, _pageidx(page));
+        if (page->slab_head == NULL) {
+            uint8_t order = _slab_order(page->slab_size);
+            lln_add(&free_slabs[order], &page->list);
+        }
+
+        *(void **)ptr   = page->slab_head;
+        page->slab_head = ptr;
+
+        page->slab_count--;
+        if (page->slab_count == 0) {
+            page->slab_size = 0;
+            lln_remove(&page->list);
+            pfree(page);
+        }
+    } else
+        pfree(page);
 }

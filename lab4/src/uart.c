@@ -6,12 +6,12 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-phys_addr_t UART_BASE   = 0x10000000;
-uint64_t UART_CLK       = 14750000;
-uint32_t UART_REG_SHIFT = 0;
-uint32_t UART_IRQ       = 10;
-
 bool UART_INIT_DONE = false;
+
+static phys_addr_t UART_BASE   = 0x10000000;
+static uint64_t UART_CLK       = 14750000;
+static uint32_t UART_REG_SHIFT = 0;
+static uint32_t UART_IRQ       = 10;
 
 typedef struct {
     uint32_t baudrate;
@@ -33,7 +33,7 @@ static char _tx_buf[BUF_SIZE];
 static RingBuffer rx_ring_buf;
 static RingBuffer tx_ring_buf;
 
-UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
+static UARTInit _get_info_from_fdt(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
     const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
     const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;

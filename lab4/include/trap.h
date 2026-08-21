@@ -11,8 +11,6 @@ typedef struct {
 } TrapFrame;
 typedef void (*trap_handler_t)(uintptr_t sepc, uintptr_t stval, void *context);
 
-extern void trap_entry(void);
-
 static inline uint64_t intr_save_and_disable(void) {
     uint64_t sstatus;
     asm volatile("csrrci %0, sstatus, 2" : "=r"(sstatus));

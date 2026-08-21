@@ -7,8 +7,12 @@
 #include "trap.h"
 #include <stdint.h>
 
-uint64_t HZ_PER_SEC;
-Timer TIMER_LIST_HEAD;
+#define NODE_TO_TIMER(nodeptr) container_of(nodeptr, Timer, list)
+#define MIN_TIMER              container_of(TIMER_LIST_HEAD.list.prev, Timer, list)
+#define MAX_TIMER              container_of(TIMER_LIST_HEAD.list.next, Timer, list)
+
+static uint64_t HZ_PER_SEC;
+static Timer TIMER_LIST_HEAD;
 
 static void timer_intr_handler(uintptr_t sepc, uintptr_t stval, void *context) {
     uint64_t now = __rdtime();

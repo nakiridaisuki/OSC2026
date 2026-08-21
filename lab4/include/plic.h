@@ -1,7 +1,6 @@
 #ifndef _PLIC_H_
 #define _PLIC_H_
 
-#include "types.h"
 #include <stdint.h>
 
 #define MAX_IRQS 64

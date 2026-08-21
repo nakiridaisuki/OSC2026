@@ -8,7 +8,6 @@
 #include "timer.h"
 #include "trap.h"
 #include "uart.h"
-#include "utils.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -45,13 +44,13 @@ void exec(void (*func)(void)) {
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_trap();
-    printf("Trap initialized\n");
+    printf("Trap initialized.\n");
 
     init_plic(fdt_ptr);
-    printf("PLIC initialized\n");
+    printf("PLIC initialized.\n");
 
     init_uart(fdt_ptr, true);
-    printf("UART Initialized, base at 0x%lx\n", UART_BASE);
+    printf("UART Initialized.\n");
 
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%p\n", CPIO_START_ADDR);

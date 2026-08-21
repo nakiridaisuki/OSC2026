@@ -5,13 +5,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-extern bool UART_INIT_DONE;
-
 // UART base info
-extern phys_addr_t UART_BASE;
-extern uint64_t UART_CLK;
-extern uint32_t UART_REG_SHIFT;
-extern uint32_t UART_IRQ;
+extern bool UART_INIT_DONE;
 
 // Standard 16550 UART register logic index
 #define UART_RBR 0 // Receive Buffer

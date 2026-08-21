@@ -17,12 +17,6 @@
     X(0x4E41434C, SBI_EXT_NACL, "Nested Acceleration Extension")        \
     X(0x00535441, SBI_EXT_STA, "Steal-time Accounting Extension")
 
-enum {
-#define X(eid, name_const, name_str) name_const = eid,
-    SBI_EXT_LIST
-#undef X
-};
-
 #define BASE_FID_LIST                                   \
     X(0x0, BASE_GET_SPEC_VERSION, sbi_get_spec_version) \
     X(0x1, BASE_GET_IMPL_ID, sbi_get_impl_id)           \
@@ -36,10 +30,6 @@ enum Base {
 #define X(fid, name_const, func_name) name_const = fid,
     BASE_FID_LIST
 #undef X
-};
-
-enum SystemReset {
-    SRST_SYSTEM_RESET = 0x0,
 };
 
 struct sbiret {

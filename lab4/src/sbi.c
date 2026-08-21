@@ -4,6 +4,16 @@
 #include <stddef.h>
 #include <stdint.h>
 
+enum {
+#define X(eid, name_const, name_str) name_const = eid,
+    SBI_EXT_LIST
+#undef X
+};
+
+enum SystemReset {
+    SRST_SYSTEM_RESET = 0x0,
+};
+
 struct sbiret sbi_ecall(
     unsigned long ext,
     unsigned long fid,

@@ -1,12 +1,10 @@
 #include "shell.h"
 #include "cpio.h"
-#include "dstruc.h"
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
 #include "timer.h"
 #include "uart.h"
-#include "utils.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -17,7 +15,7 @@ typedef struct {
 } shell_cmd_t;
 
 #define X(name, desc) {#name, name, desc},
-shell_cmd_t CMD_TABLE[] = {SHELL_FUNC_LIST};
+static const shell_cmd_t CMD_TABLE[] = {SHELL_FUNC_LIST};
 #undef X
 
 #define X(name, desc) CMD_##name,
@@ -94,7 +92,7 @@ int info(char *args) {
     return 0;
 }
 
-void _timeout_cb(void *arg) {
+static void _timeout_cb(void *arg) {
     char *str = (char *)arg;
     printf("%s\n", str);
     free(str);

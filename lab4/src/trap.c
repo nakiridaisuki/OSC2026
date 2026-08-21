@@ -7,6 +7,7 @@
 #define MAX_LOCAL_INTR 16
 #define MAX_EXCEPTIONS 64
 
+extern void trap_entry(void);
 static trap_handler_t local_intr_table[MAX_LOCAL_INTR];
 static trap_handler_t exception_table[MAX_EXCEPTIONS];
 

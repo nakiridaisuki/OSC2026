@@ -20,15 +20,6 @@
     X(size_dt_struct   , 9)
 // clang-format on
 
-// FDT struct block tokens
-typedef enum {
-    FDT_BEGIN_NODE = 0x1,
-    FDT_END_NODE   = 0x2,
-    FDT_PROP       = 0x3,
-    FDT_NOP        = 0x4,
-    FDT_END        = 0x9,
-} FDTEvent;
-
 // FDT property struct
 typedef struct {
     uint32_t len;
@@ -38,24 +29,12 @@ typedef struct {
 } FDTProp;
 
 typedef struct {
-    const uint8_t *cursor;
-    const uint8_t *strings;
-    int depth;
-
-    const uint8_t *event_start;
-    const char *name;
-    const uint8_t *val;
-    uint32_t len;
-    uint32_t nameoff;
-} FDTIterator;
-
-typedef void (*fdt_node_cb_t)(const uint8_t *node_ptr, const char *node_name, void *opaque_arg);
-
-typedef struct {
 #define X(field_name, idx) uint32_t field_name;
     FDT_HEADER_FIELDS
 #undef X
 } FDTHeader;
+
+typedef void (*fdt_node_cb_t)(const uint8_t *node_ptr, const char *node_name, void *opaque_arg);
 
 int fdt_node_name_eq(const char *node_name, const char *seg, size_t seg_len);
 
@@ -68,12 +47,15 @@ fdt_find_prop(const uint8_t *dt_struct_ptr, const uint8_t *dt_strings_prt, const
 void fdt_foreach_subnode(const uint8_t *parent_ptr, fdt_node_cb_t callback, void *opaque_arg);
 
 const uint8_t *fdt_find_node_by_path(const uint8_t *dt_struct_ptr, const char *path);
-FDTProp fdt_find_prop_by_path(
+inline static FDTProp fdt_find_prop_by_path(
     const uint8_t *dt_struct_ptr,
     const uint8_t *dt_strings_prt,
     const char *path,
     const char *prop_name
-);
+) {
+    dt_struct_ptr = fdt_find_node_by_path(dt_struct_ptr, path);
+    return fdt_find_prop(dt_struct_ptr, dt_strings_prt, prop_name);
+}
 
 //////////////////// Utils Functions /////////////////////////
 
