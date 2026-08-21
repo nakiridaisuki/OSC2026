@@ -1,3 +1,4 @@
+#include "plic.h"
 #include "printf.h"
 #include "trap.h"
 #include "uart.h"
@@ -39,8 +40,11 @@ int uart_getuint32() {
 }
 
 void main(unsigned long hartid, const uint8_t *fdt_ptr) {
-    init_trap(fdt_ptr);
+    init_trap();
     printf("Trap initialized\n");
+
+    init_plic(fdt_ptr);
+    printf("PLIC initialized\n");
 
     init_uart(fdt_ptr, true);
     printf("Init uart\n");
