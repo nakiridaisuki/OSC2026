@@ -31,7 +31,7 @@ struct _task {
     void *args;
     Task *next;
 };
-static Task task_head = {0, NULL, 0, 0, NULL, NULL};
+static Task task_head = {0, NULL, NULL, NULL};
 void trap_add_task(callback_t callback, void *args, int priority) {
     Task *new_tsk = malloc(sizeof(Task));
     *new_tsk      = (Task){priority, callback, args};

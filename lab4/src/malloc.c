@@ -3,6 +3,7 @@
 #include "dstruc.h"
 #include "dtb.h"
 #include "string.h"
+#include "trap.h"
 #include "types.h"
 #include "utils.h"
 #include <stdbool.h>
@@ -327,12 +328,23 @@ void init_malloc(const uint8_t *fdt_ptr) {
 }
 
 void *malloc(uint64_t bytes) {
+    int flag = intr_save_and_disable();
+
+    void *ptr = NULL;
     if (bytes <= PAGE_SIZE / 2)
-        return dalloc(bytes);
-    return palloc(bytes);
+        ptr = dalloc(bytes);
+    else
+        ptr = palloc(bytes);
+
+    intr_restore(flag);
+    return ptr;
 }
 
 void free(void *ptr) {
+    if (ptr == NULL)
+        return;
+    int flag = intr_save_and_disable();
+
     phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
     Page *page          = _mem2page((uint8_t *)mem_ptr);
     if (page == NULL)
@@ -355,4 +367,6 @@ void free(void *ptr) {
         }
     } else
         pfree(page);
+
+    intr_restore(flag);
 }
