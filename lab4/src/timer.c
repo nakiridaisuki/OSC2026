@@ -5,6 +5,7 @@
 #include "printf.h"
 #include "sbi.h"
 #include "trap.h"
+#include "types.h"
 #include <stdint.h>
 
 #define NODE_TO_TIMER(nodeptr) container_of(nodeptr, Timer, list)
@@ -21,7 +22,7 @@ static void timer_intr_handler(uintptr_t sepc, uintptr_t stval, void *context) {
         lln_remove(&timer->list);
 
         if (timer->callback)
-            timer->callback(timer->arg);
+            trap_add_task(timer->callback, timer->arg, 5);
         free(timer);
     }
     sbi_set_timer(MIN_TIMER->expires);
@@ -48,7 +49,7 @@ void init_timer(const uint8_t *fdt_ptr) {
     register_local_intr(5, timer_intr_handler);
 }
 
-void add_timer(Timer *timer, uint64_t delay_ms, timer_cb_t callback, void *arg) {
+void add_timer(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) {
     timer->expires  = __rdtime() + delay_ms * HZ_PER_SEC / 1000;
     timer->callback = callback;
     timer->arg      = arg;

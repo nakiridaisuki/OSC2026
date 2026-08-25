@@ -1,7 +1,7 @@
 #ifndef _TRAP_H_
 #define _TRAP_H_
 
-#include "cpio.h"
+#include "types.h"
 #include <stdint.h>
 
 typedef struct {
@@ -26,5 +26,6 @@ void init_trap();
 void trap_handler(TrapFrame *tf);
 void register_local_intr(uint32_t code, trap_handler_t handler);
 void register_exception(uint32_t code, trap_handler_t handler);
+void trap_add_task(callback_t callback, void *args, int priority);
 
 #endif // !_TRAP_H_

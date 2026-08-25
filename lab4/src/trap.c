@@ -1,6 +1,8 @@
 #include "trap.h"
+#include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
+#include "types.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -10,6 +12,7 @@
 extern void trap_entry(void);
 static trap_handler_t local_intr_table[MAX_LOCAL_INTR];
 static trap_handler_t exception_table[MAX_EXCEPTIONS];
+static int current_priority = 999;
 
 static void default_handler(uintptr_t sepc, uintptr_t stval, void *context) {
     uint64_t scause;
@@ -19,6 +22,29 @@ static void default_handler(uintptr_t sepc, uintptr_t stval, void *context) {
     );
     while (1) {
     }
+}
+
+typedef struct _task Task;
+struct _task {
+    int priority;
+    callback_t callback;
+    void *args;
+    Task *next;
+};
+static Task task_head = {0, NULL, 0, 0, NULL, NULL};
+void trap_add_task(callback_t callback, void *args, int priority) {
+    Task *new_tsk = malloc(sizeof(Task));
+    *new_tsk      = (Task){priority, callback, args};
+
+    int flag = intr_save_and_disable();
+
+    Task *curr = &task_head;
+    while (curr->next != NULL && curr->next->priority <= priority)
+        curr = curr->next;
+    new_tsk->next = curr->next;
+    curr->next    = new_tsk;
+
+    intr_restore(flag);
 }
 
 void register_local_intr(uint32_t code, trap_handler_t handler) {
@@ -69,5 +95,24 @@ void trap_handler(TrapFrame *tf) {
         local_intr_table[scause](sepc, stval, NULL);
     } else { // exception
         exception_table[scause](sepc, stval, NULL);
+    }
+
+    while (1) {
+        if (task_head.next == NULL || task_head.next->priority >= current_priority)
+            break;
+
+        Task *tsk      = task_head.next;
+        task_head.next = tsk->next;
+
+        int prev_prio    = current_priority;
+        current_priority = tsk->priority;
+
+        // enable supervisor global intr (SIE)
+        asm volatile("csrs sstatus, 2");
+        tsk->callback(tsk->args);
+        free(tsk);
+        // disable supervisor global intr (SIE)
+        asm volatile("csrc sstatus, 2");
+        current_priority = prev_prio;
     }
 }

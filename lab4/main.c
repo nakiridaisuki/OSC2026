@@ -49,14 +49,15 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_plic(fdt_ptr);
     printf("PLIC initialized.\n");
 
-    init_uart(fdt_ptr, true);
-    printf("UART Initialized.\n");
-
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%p\n", CPIO_START_ADDR);
 
     init_malloc(fdt_ptr);
     printf("Malloc initialized\n");
+
+    init_uart(fdt_ptr, true);
+    uart_putchar('T');
+    printf("UART Initialized.\n");
 
     init_timer(fdt_ptr);
     printf("Timer initialized\n");

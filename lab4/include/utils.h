@@ -12,6 +12,9 @@
 #define LOWBIT(x)  (x & -x)
 #define SWAP(a, b) a ^= b ^= a ^= b
 
+#define MIN(a, b) (a < b ? a : b)
+#define MAX(a, b) (a > b ? a : b)
+
 #ifdef DEBUG
 #define DBG_PRINTF(fmt, ...) printf("[DEBUG %s] " fmt, __func__, ##__VA_ARGS__)
 #else
