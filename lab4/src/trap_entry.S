@@ -6,8 +6,8 @@ trap_entry:
     csrrw sp, sscratch, sp
 
     // check if sp == 0
-    // sp == 0 : trap from kernel
-    // sp == 1 : trap from user
+    // sp == 0   : trap from kernel
+    // otherwise : trap from user
     bnez sp, .Ltrap_from_user
 
 .Ltrap_from_kernel:

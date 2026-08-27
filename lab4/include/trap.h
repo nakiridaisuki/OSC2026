@@ -9,7 +9,8 @@ typedef struct {
     uint64_t sstatus;
     uint64_t sepc;
 } TrapFrame;
-typedef void (*trap_handler_t)(uintptr_t sepc, uintptr_t stval, void *context);
+typedef void (*intr_handler_t)(void *context);
+typedef void (*excep_handler_t)(TrapFrame *tf, uint64_t stval);
 
 static inline uint64_t intr_save_and_disable(void) {
     uint64_t sstatus;
@@ -24,8 +25,8 @@ static inline void intr_restore(uint64_t prev_sie) {
 
 void init_trap();
 void trap_handler(TrapFrame *tf);
-void register_local_intr(uint32_t code, trap_handler_t handler);
-void register_exception(uint32_t code, trap_handler_t handler);
+void register_local_intr(uint32_t code, intr_handler_t handler);
+void register_exception(uint32_t code, excep_handler_t handler);
 void trap_add_task(callback_t callback, void *args, int priority);
 
 #endif // !_TRAP_H_

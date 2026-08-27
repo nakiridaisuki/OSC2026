@@ -10,15 +10,35 @@
 #define MAX_EXCEPTIONS 64
 
 extern void trap_entry(void);
-static trap_handler_t local_intr_table[MAX_LOCAL_INTR];
-static trap_handler_t exception_table[MAX_EXCEPTIONS];
+static intr_handler_t local_intr_table[MAX_LOCAL_INTR];
+static excep_handler_t exception_table[MAX_EXCEPTIONS];
 static int current_priority = 999;
 
-static void default_handler(uintptr_t sepc, uintptr_t stval, void *context) {
-    uint64_t scause;
+static void default_intr(void *context) {
+    uint64_t scause, stval, sepc;
     asm volatile("csrr %0, scause" : "=r"(scause));
+    asm volatile("csrr %0, stval" : "=r"(stval));
+    asm volatile("csrr %0, sepc" : "=r"(sepc));
     printf(
-        "[ERROR] Unhandled trap! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n", scause, sepc, stval
+        "[ERROR] Unhandled interrupt! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n",
+        scause,
+        sepc,
+        stval
+    );
+    while (1) {
+    }
+}
+
+static void default_excep(TrapFrame *tf, uint64_t stval) {
+    uint64_t scause, sepc;
+    asm volatile("csrr %0, scause" : "=r"(scause));
+    asm volatile("csrr %0, stval" : "=r"(stval));
+    asm volatile("csrr %0, sepc" : "=r"(sepc));
+    printf(
+        "[ERROR] Unhandled exception! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n",
+        scause,
+        sepc,
+        stval
     );
     while (1) {
     }
@@ -47,11 +67,11 @@ void trap_add_task(callback_t callback, void *args, int priority) {
     intr_restore(flag);
 }
 
-void register_local_intr(uint32_t code, trap_handler_t handler) {
+void register_local_intr(uint32_t code, intr_handler_t handler) {
     if (code < MAX_LOCAL_INTR)
         local_intr_table[code] = handler;
 }
-void register_exception(uint32_t code, trap_handler_t handler) {
+void register_exception(uint32_t code, excep_handler_t handler) {
     if (code < MAX_EXCEPTIONS)
         exception_table[code] = handler;
 }
@@ -74,17 +94,18 @@ void init_trap() {
     asm volatile("csrs sie, %0" ::"r"(1UL << 9));
 
     for (size_t i = 0; i < MAX_LOCAL_INTR; i++)
-        local_intr_table[i] = default_handler;
+        local_intr_table[i] = default_intr;
     for (size_t i = 0; i < MAX_EXCEPTIONS; i++)
-        exception_table[i] = default_handler;
+        exception_table[i] = default_excep;
 }
 
 void trap_handler(TrapFrame *tf) {
-    uint64_t scause, stval, sepc;
+    uint64_t scause, stval;
     asm volatile("csrr %0, scause" : "=r"(scause));
     asm volatile("csrr %0, stval" : "=r"(stval));
-    sepc = tf->sepc;
 
+    // uint64_t sepc;
+    // sepc = tf->sepc;
     // printf("\n[Kernel Trap Handler] Caught an exception!\n");
     // printf("  scause: 0x%lx\n", scause);
     // printf("  sepc:   0x%lx\n", sepc);
@@ -92,9 +113,9 @@ void trap_handler(TrapFrame *tf) {
 
     if (scause & (1ULL << 63)) { // interrupt
         scause ^= (1ULL << 63);
-        local_intr_table[scause](sepc, stval, NULL);
+        local_intr_table[scause](NULL);
     } else { // exception
-        exception_table[scause](sepc, stval, NULL);
+        exception_table[scause](tf, stval);
     }
 
     while (1) {

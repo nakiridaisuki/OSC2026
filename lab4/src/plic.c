@@ -33,7 +33,7 @@ static void default_irq_handler(uint32_t irq, void *context) {
     }
 }
 
-static void plic_intr_handler(uintptr_t sepc, uintptr_t stval, void *context) {
+static void plic_intr_handler(void *context) {
     while (1) {
         uint32_t irq = PLIC_CLAME(1);
         if (irq == 0)

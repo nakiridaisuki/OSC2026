@@ -23,24 +23,27 @@ void fake_user(void) {
 }
 
 void exec(void (*func)(void)) {
-    asm volatile("csrw sepc, %0" : : "r"((uint64_t)func));
-    printf("Set user function address.\n");
+    uint64_t user_sp = (uint64_t)&user_stack[4096];
+    uint64_t kernel_sp;
+    asm volatile("mv %0, sp" : "=r"(kernel_sp));
 
     uint64_t sstatus;
     asm volatile("csrr %0, sstatus" : "=r"(sstatus));
     sstatus &= ~(1UL << 8); // SPP = 0 enter U-mode after sret
     sstatus |= (1UL << 5);  // SPIE = 1 enable U-mode interrupt
-    asm volatile("csrw sstatus, %0" : : "r"(sstatus));
-    printf("Enable U-mode interrupt.\n");
 
-    uint64_t user_sp = (uint64_t)&user_stack[4096];
-    printf("Set user stack.\n");
-
-    asm volatile("mv sp, %0\n"
+    asm volatile("csrc sstatus, 2\n" // disable interrupt
+                 "csrw sstatus, %0\n"
+                 "csrw sepc, %1\n"
+                 "csrw sscratch, %2\n"
+                 "mv sp, %3\n"
                  "sret\n"
                  :
-                 : "r"(user_sp));
+                 : "r"(sstatus), "r"(func), "r"(kernel_sp), "r"(user_sp)
+                 : "memory");
 }
+
+void ecall_handler(TrapFrame *tf, uint64_t stval) { tf->sepc += 4; }
 
 void test_cb(void *args) {
     int *data = (int *)args;
@@ -113,7 +116,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_timer(fdt_ptr);
     printf("Timer initialized\n");
 
-    task_qeueu_test();
+    // task_qeueu_test();
+    // register_exception(8, ecall_handler);
     // exec(fake_user);
 
     shell();

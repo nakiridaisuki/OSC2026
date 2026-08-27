@@ -15,7 +15,7 @@
 static uint64_t HZ_PER_SEC;
 static Timer TIMER_LIST_HEAD;
 
-static void timer_intr_handler(uintptr_t sepc, uintptr_t stval, void *context) {
+static void timer_intr_handler(void *context) {
     uint64_t now = __rdtime();
     while (MIN_TIMER != &TIMER_LIST_HEAD && MIN_TIMER->expires <= now) {
         Timer *timer = MIN_TIMER;
