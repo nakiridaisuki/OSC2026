@@ -15,11 +15,19 @@ When a program run under U-mode, the `ecall` will be cached by S-mode.
 
 ```txt
 +--------------------------+
-| U-mode (user mode)       |
+|    U-mode (User mode)    |
 +--------------------------+
-| S-mode (supervisor mode) |
+   | ecall          ^ sret
+   | (Syscall)      |
+   v                |
 +--------------------------+
-| M-mode (machine mode)    |
+| S-mode (Supervisor mode) |
++--------------------------+
+   | ecall          ^ mret
+   | (SBI call)     |
+   v                |
++--------------------------+
+|   M-mode (Machine mode)  |
 +--------------------------+
 ```
 
@@ -63,9 +71,49 @@ We need to save the value in this registers into the stack before calling the tr
 
 In the trap handler, we can use `scause` to identify what exception or interrupt happened.
 According to the RISC-V ISC manual, here is the definition of `scuase`:
-![interrupt](.images/scause-intr.png)
 
-![exception](.images/scause-excep.png)
+Interrupts:
+
+| Interrupt | Exception Code | Description |
+| :---: | :---: | :--- |
+| 1 | 0 | *Reserved* |
+| 1 | 1 | Supervisor software interrupt |
+| 1 | 2-4 | *Reserved* |
+| 1 | 5 | Supervisor timer interrupt |
+| 1 | 6-8 | *Reserved* |
+| 1 | 9 | Supervisor external interrupt |
+| 1 | 10-12 | *Reserved* |
+| 1 | 13 | Counter-overflow interrupt |
+| 1 | 14-15 | *Reserved* |
+| 1 | ≥16 | *Designated for platform use* |
+
+Exceptions:
+
+| Interrupt | Exception Code | Description |
+| :---: | :---: | :--- |
+| 0 | 0 | Instruction address misaligned |
+| 0 | 1 | Instruction access fault |
+| 0 | 2 | Illegal instruction |
+| 0 | 3 | Breakpoint |
+| 0 | 4 | Load address misaligned |
+| 0 | 5 | Load access fault |
+| 0 | 6 | Store/AMO address misaligned |
+| 0 | 7 | Store/AMO access fault |
+| 0 | 8 | Environment call from U-mode |
+| 0 | 9 | Environment call from S-mode |
+| 0 | 10-11 | *Reserved* |
+| 0 | 12 | Instruction page fault |
+| 0 | 13 | Load page fault |
+| 0 | 14 | *Reserved* |
+| 0 | 15 | Store/AMO page fault |
+| 0 | 16-17 | *Reserved* |
+| 0 | 18 | Software check |
+| 0 | 19 | Hardware error |
+| 0 | 20-23 | *Reserved* |
+| 0 | 24-31 | *Designated for custom use* |
+| 0 | 32-47 | *Reserved* |
+| 0 | 48-63 | *Designated for custom use* |
+| 0 | ≥64 | *Reserved* |
 
 We can handle every trap we need in trap handler like this:
 
