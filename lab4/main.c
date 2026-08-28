@@ -117,7 +117,7 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     printf("Timer initialized\n");
 
     // task_qeueu_test();
-    // register_exception(8, ecall_handler);
+    register_exception(8, ecall_handler);
     // exec(fake_user);
 
     shell();
