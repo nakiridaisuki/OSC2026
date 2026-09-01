@@ -34,6 +34,29 @@ inline static int lln_remove(LinkedListNode *node) {
     node->prev = node->next = node;
     return 0;
 }
+inline static int lln_push_front(LinkedListNode *head, LinkedListNode *node) {
+    return lln_add(head, node);
+}
+inline static int lln_push_back(LinkedListNode *head, LinkedListNode *node) {
+    if (node == NULL || head == NULL)
+        return 1;
+    return lln_add(head->prev, node);
+}
+inline static LinkedListNode *lln_pop_front(LinkedListNode *head) {
+    if (head == NULL)
+        return NULL;
+    LinkedListNode *tmp = head->next;
+    lln_remove(tmp);
+    return tmp;
+}
+inline static LinkedListNode *lln_pop_back(LinkedListNode *head) {
+    if (head == NULL)
+        return NULL;
+    LinkedListNode *tmp = head->prev;
+    lln_remove(tmp);
+    return tmp;
+}
+inline static int lln_empty(LinkedListNode *head) { return head->next == head; }
 
 typedef struct {
     char *buf;

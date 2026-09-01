@@ -1,7 +1,11 @@
 TARGET  ?= kernel
 OBJ_DIR ?= ./build/$(TARGET)
 LINKER  ?= linkers/linker.$(TARGET).ld
-OBJS    := main.o boot.o string.o uart.o printf.o sbi.o dtb.o utils.o cpio.o shell.o malloc.o trap_entry.o trap.o timer.o plic.o
+OBJS    := main.o boot.o \
+					 string.o utils.o malloc.o sbi.o dtb.o \
+					 trap_entry.o trap.o plic.o timer.o \
+					 uart.o cpio.o printf.o shell.o \
+					 thread.o thread_switch.o
 
 CFLAGS := -march=rv64gc_zbb -O3
 # CFLAGS += -DDEBUG
