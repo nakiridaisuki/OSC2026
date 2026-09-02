@@ -5,7 +5,7 @@ OBJS    := main.o boot.o \
 					 string.o utils.o malloc.o sbi.o dtb.o \
 					 trap_entry.o trap.o plic.o timer.o \
 					 uart.o cpio.o printf.o shell.o \
-					 thread.o thread_switch.o
+					 thread.o thread_switch.o syscall.o
 
 CFLAGS := -march=rv64gc_zbb -O3
 # CFLAGS += -DDEBUG

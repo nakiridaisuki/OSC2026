@@ -1,4 +1,5 @@
-.global trap_entry
+.global trap_entry 
+.global trap_restore
 .align 4
 
 trap_entry:
@@ -69,6 +70,7 @@ trap_entry:
     mv a0, sp
     call trap_handler
 
+trap_restore:
     ld t0, 8*32(sp)
     csrw sstatus, t0
     ld t0, 8*33(sp)

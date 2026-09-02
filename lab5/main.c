@@ -5,13 +5,53 @@
 #include "printf.h"
 #include "sbi.h"
 #include "shell.h"
+#include "syscall.h"
 #include "thread.h"
 #include "timer.h"
 #include "trap.h"
 #include "uart.h"
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
+void user_test(void) {
+    char buf[256];
+    sprintf(buf, "Hi, I am user thread %ld\n", getpid());
+    uart_write(buf, strlen(buf));
+    sprintf(buf, "Fork now\n");
+    uart_write(buf, strlen(buf));
+    long pid = fork();
+    if (pid == 0) {
+        sprintf(buf, "child process with pid %ld\n", getpid());
+        uart_write(buf, strlen(buf));
+    } else {
+        sprintf(buf, "parent process with pid %ld\n", getpid());
+        uart_write(buf, strlen(buf));
+    }
+    exit(0);
+}
+
+void _exec(void (*func)(void)) {
+    uint64_t user_sp       = (uint64_t)malloc(4096);
+    get_current()->u_stack = (void *)user_sp;
+    uint64_t kernel_sp;
+    asm volatile("mv %0, sp" : "=r"(kernel_sp));
+
+    uint64_t sstatus;
+    asm volatile("csrr %0, sstatus" : "=r"(sstatus));
+    sstatus &= ~(1UL << 8); // SPP = 0 enter U-mode after sret
+    sstatus |= (1UL << 5);  // SPIE = 1 enable U-mode interrupt
+
+    asm volatile("csrc sstatus, 2\n" // disable interrupt
+                 "csrw sstatus, %0\n"
+                 "csrw sepc, %1\n"
+                 "csrw sscratch, %2\n"
+                 "mv sp, %3\n"
+                 "sret\n"
+                 :
+                 : "r"(sstatus), "r"(func), "r"(kernel_sp), "r"(user_sp + 4096)
+                 : "memory");
+}
 void foo() {
     for (int i = 0; i < 5; i++) {
         printf("Thread id: %d print %d\n", get_current()->tid, i);
@@ -23,10 +63,11 @@ void foo() {
 }
 
 void test_thread() {
-    for (int i = 0; i < 3; i++) {
-        thread_create(foo);
-    }
-    idle();
+    _exec(user_test);
+    // for (int i = 0; i < 3; i++) {
+    //     thread_create(foo);
+    // }
+    // idle();
 }
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
@@ -51,7 +92,13 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_thread();
     printf("Thread initialized\n");
 
-    test_thread();
+    init_syscall();
+    printf("System Call initialized\n");
+
+    // test_thread();
+    // _exec(user_test);
+    thread_create(test_thread);
+    idle();
 
     shell();
 
