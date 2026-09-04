@@ -55,16 +55,13 @@ static Task task_head = {0, NULL, NULL, NULL};
 void trap_add_task(callback_t callback, void *args, int priority) {
     Task *new_tsk = malloc(sizeof(Task));
     *new_tsk      = (Task){priority, callback, args};
-
-    int flag = intr_save_and_disable();
-
-    Task *curr = &task_head;
-    while (curr->next != NULL && curr->next->priority <= priority)
-        curr = curr->next;
-    new_tsk->next = curr->next;
-    curr->next    = new_tsk;
-
-    intr_restore(flag);
+    ATOMIC {
+        Task *curr = &task_head;
+        while (curr->next != NULL && curr->next->priority <= priority)
+            curr = curr->next;
+        new_tsk->next = curr->next;
+        curr->next    = new_tsk;
+    }
 }
 
 void register_local_intr(uint32_t code, intr_handler_t handler) {

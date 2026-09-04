@@ -32,7 +32,7 @@ void kill_zombies() {
 void idle() {
     while (1) {
         kill_zombies();
-        schedule();
+        thread_schedule();
     }
 }
 
@@ -60,9 +60,7 @@ void thread_create(void (*func)(void)) {
     ctx->tid     = global_tid++;
     lln_init(&ctx->list);
 
-    int flag = intr_save_and_disable();
-    lln_push_back(idle_list, &ctx->list);
-    intr_restore(flag);
+    ATOMIC { lln_push_back(idle_list, &ctx->list); }
 }
 long thread_fork(TrapFrame *tf) {
     ThreadCtx *new_ctx = (ThreadCtx *)malloc(sizeof(ThreadCtx));
@@ -89,36 +87,53 @@ long thread_fork(TrapFrame *tf) {
     new_ctx->tid     = global_tid++;
     lln_init(&new_ctx->list);
 
-    int flag = intr_save_and_disable();
-    lln_push_back(idle_list, &new_ctx->list);
-    intr_restore(flag);
+    ATOMIC { lln_push_back(idle_list, &new_ctx->list); }
     return new_ctx->tid;
+}
+int thread_stop(long tid) {
+    if (tid == curr_thd->tid)
+        thread_exit();
+
+    ATOMIC {
+        LinkedListNode *tmp = idle_list->next;
+        while (tmp != idle_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == tid) {
+                lln_remove(tmp);
+                lln_push_back(&zonbies_list, tmp);
+                printf("Thread %ld is stoped.\n", tid);
+                return 0;
+            }
+            tmp = tmp->next;
+        }
+    }
+    return -1;
 }
 
 void thread_exit() {
-    ThreadCtx *ctx = get_current();
-    lln_push_back(&zonbies_list, &ctx->list);
-    switch_to(NULL, &_idle_thd);
+    printf("Thread %ld exit.\n", curr_thd->tid);
+    ATOMIC {
+        lln_push_back(&zonbies_list, &curr_thd->list);
+        curr_thd = &_idle_thd;
+        switch_to(NULL, &_idle_thd);
+    }
 }
 
-void schedule() {
+void thread_schedule() {
     if (lln_empty(idle_list))
         return;
-
-    int flag = intr_save_and_disable();
-
-    LinkedListNode *next_node = lln_pop_front(idle_list);
-    ThreadCtx *next_thd       = container_of(next_node, ThreadCtx, list);
-
-    if (curr_thd != &_idle_thd) {
-        lln_push_back(idle_list, &curr_thd->list);
+    ATOMIC {
+        LinkedListNode *next_node;
+        ThreadCtx *next_thd, *tmp_thd;
+        next_node = lln_pop_front(idle_list);
+        next_thd  = container_of(next_node, ThreadCtx, list);
+        if (curr_thd != &_idle_thd) {
+            lln_push_back(idle_list, &curr_thd->list);
+        }
+        tmp_thd  = curr_thd;
+        curr_thd = next_thd;
+        switch_to(tmp_thd, next_thd);
     }
-    ThreadCtx *tmp_thd = curr_thd;
-    curr_thd           = next_thd;
-
-    switch_to(tmp_thd, next_thd);
-
-    intr_restore(flag);
 }
 
 ThreadCtx *get_current() { return curr_thd; }

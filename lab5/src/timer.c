@@ -55,17 +55,15 @@ void add_timer(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) 
     timer->arg      = arg;
     lln_init(&timer->list);
 
-    uint64_t flag = intr_save_and_disable();
-
-    Timer *tmp = MAX_TIMER;
-    while (tmp->expires > timer->expires) {
+    ATOMIC {
+        Timer *tmp = MAX_TIMER;
+        while (tmp->expires > timer->expires) {
+            if (tmp == &TIMER_LIST_HEAD)
+                break;
+            tmp = NODE_TO_TIMER(tmp->list.next);
+        }
+        lln_add(tmp->list.prev, &timer->list);
         if (tmp == &TIMER_LIST_HEAD)
-            break;
-        tmp = NODE_TO_TIMER(tmp->list.next);
+            sbi_set_timer(timer->expires);
     }
-    lln_add(tmp->list.prev, &timer->list);
-    if (tmp == &TIMER_LIST_HEAD)
-        sbi_set_timer(timer->expires);
-
-    intr_restore(flag);
 }

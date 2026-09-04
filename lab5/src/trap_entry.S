@@ -115,11 +115,13 @@ trap_restore:
     // recover user sp to sscratch
     ld t0, 8*2(sp)
     csrw sscratch, t0
+    ld x5, 8*5(sp)
     addi sp, sp, 8*34
     csrrw sp, sscratch, sp
     sret
 
 .Lreturn_to_kernel:
     csrw sscratch, zero
+    ld x5, 8*5(sp)
     addi sp, sp, 8*34
     sret

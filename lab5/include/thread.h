@@ -20,8 +20,9 @@ void idle();
 void init_thread();
 void thread_create(void (*func)(void));
 long thread_fork(TrapFrame *tf);
+int thread_stop(long pid);
 void thread_exit();
-void schedule();
+void thread_schedule();
 
 ThreadCtx *get_current();
 #endif // !_THREAD_H_

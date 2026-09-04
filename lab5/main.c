@@ -20,13 +20,19 @@ void user_test(void) {
     uart_write(buf, strlen(buf));
     sprintf(buf, "Fork now\n");
     uart_write(buf, strlen(buf));
-    long pid = fork();
-    if (pid == 0) {
+    long child_pid = fork();
+    if (child_pid == 0) {
         sprintf(buf, "child process with pid %ld\n", getpid());
         uart_write(buf, strlen(buf));
+        schedule();
     } else {
         sprintf(buf, "parent process with pid %ld\n", getpid());
         uart_write(buf, strlen(buf));
+        schedule();
+
+        sprintf(buf, "parent stop child now.\n");
+        uart_write(buf, strlen(buf));
+        stop(child_pid);
     }
     exit(0);
 }
@@ -57,7 +63,7 @@ void foo() {
         printf("Thread id: %d print %d\n", get_current()->tid, i);
         for (int j = 0; j < 1000000; j++)
             ;
-        schedule();
+        thread_schedule();
     }
     thread_exit();
 }

@@ -68,5 +68,11 @@ inline static int stop(long pid) {
      */
     return sys_ecall(7, pid, 0, 0, 0, 0, 0, 0);
 }
+inline static int schedule() {
+    /*
+     * Schedule to next idle thread.
+     */
+    return sys_ecall(8, 0, 0, 0, 0, 0, 0, 0);
+}
 
 #endif // !_SYSCALL_H_

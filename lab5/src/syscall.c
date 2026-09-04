@@ -70,10 +70,13 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     case 5: // waitpid(long pid)
         break;
     case 6: // exit(int status)
-        printf("Thread %ld exit.\n", get_current()->tid);
         thread_exit();
         break;
     case 7: // stop(long pid)
+        thread_stop(tf->a0);
+        break;
+    case 8: // schedule()
+        thread_schedule();
         break;
     default:
         break;

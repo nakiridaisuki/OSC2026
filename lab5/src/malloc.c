@@ -328,45 +328,41 @@ void init_malloc(const uint8_t *fdt_ptr) {
 }
 
 void *malloc(uint64_t bytes) {
-    int flag = intr_save_and_disable();
-
     void *ptr = NULL;
-    if (bytes <= PAGE_SIZE / 2)
-        ptr = dalloc(bytes);
-    else
-        ptr = palloc(bytes);
-
-    intr_restore(flag);
+    ATOMIC {
+        if (bytes <= PAGE_SIZE / 2)
+            ptr = dalloc(bytes);
+        else
+            ptr = palloc(bytes);
+    }
     return ptr;
 }
 
 void free(void *ptr) {
     if (ptr == NULL)
         return;
-    int flag = intr_save_and_disable();
+    ATOMIC {
+        phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
+        Page *page          = _mem2page((uint8_t *)mem_ptr);
+        if (page == NULL)
+            return;
+        if (page->slab_size != 0) {
+            ALLOC_LOG("[CF] Free 0x%lx at order %d, page %d.\n", ptr, page->order, _pageidx(page));
+            if (page->slab_head == NULL) {
+                uint8_t order = _slab_order(page->slab_size);
+                lln_add(&free_slabs[order], &page->list);
+            }
 
-    phys_addr_t mem_ptr = ALIGN_DOWN((phys_addr_t)ptr, PAGE_SIZE);
-    Page *page          = _mem2page((uint8_t *)mem_ptr);
-    if (page == NULL)
-        return;
-    if (page->slab_size != 0) {
-        ALLOC_LOG("[CF] Free 0x%lx at order %d, page %d.\n", ptr, page->order, _pageidx(page));
-        if (page->slab_head == NULL) {
-            uint8_t order = _slab_order(page->slab_size);
-            lln_add(&free_slabs[order], &page->list);
-        }
+            *(void **)ptr   = page->slab_head;
+            page->slab_head = ptr;
 
-        *(void **)ptr   = page->slab_head;
-        page->slab_head = ptr;
-
-        page->slab_count--;
-        if (page->slab_count == 0) {
-            page->slab_size = 0;
-            lln_remove(&page->list);
+            page->slab_count--;
+            if (page->slab_count == 0) {
+                page->slab_size = 0;
+                lln_remove(&page->list);
+                pfree(page);
+            }
+        } else
             pfree(page);
-        }
-    } else
-        pfree(page);
-
-    intr_restore(flag);
+    }
 }
