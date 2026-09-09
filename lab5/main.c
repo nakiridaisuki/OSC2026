@@ -24,15 +24,70 @@ void user_test(void) {
     if (child_pid == 0) {
         sprintf(buf, "child process with pid %ld\n", getpid());
         uart_write(buf, strlen(buf));
-        schedule();
+        yield();
     } else {
+        fork();
         sprintf(buf, "parent process with pid %ld\n", getpid());
         uart_write(buf, strlen(buf));
-        schedule();
-
-        sprintf(buf, "parent stop child now.\n");
+        sprintf(buf, "Wait pid %ld\n", child_pid);
         uart_write(buf, strlen(buf));
-        stop(child_pid);
+        long wait_res = waitpid(child_pid);
+        sprintf(buf, "Pid %ld finished.\n", wait_res);
+        uart_write(buf, strlen(buf));
+    }
+    // if (child_pid == 0) {
+    //     sprintf(buf, "Thread %ld exit.\n", getpid());
+    //     uart_write(buf, strlen(buf));
+    // } else {
+    //     while (1) {
+    //     }
+    // }
+    exit(0);
+}
+
+void fork_test() {
+    char buf[256];
+    sprintf(buf, "Fork test (pid = %d)\n", getpid());
+    uart_write(buf, strlen(buf));
+    int cnt = 1;
+    int ret = 0;
+    if ((ret = fork()) == 0) {
+        long cur_sp;
+        asm volatile("mv %0, sp" : "=r"(cur_sp));
+        sprintf(
+            buf, "child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp
+        );
+        uart_write(buf, strlen(buf));
+        cnt++;
+
+        if ((ret = fork()) != 0) {
+            asm volatile("mv %0, sp" : "=r"(cur_sp));
+            sprintf(
+                buf, "child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp
+            );
+            uart_write(buf, strlen(buf));
+            waitpid(ret);
+        } else {
+            while (cnt < 5) {
+                asm volatile("mv %0, sp" : "=r"(cur_sp));
+                sprintf(
+                    buf,
+                    "child2: pid = %d, cnt = %d, &cnt = %p, sp = %p\n",
+                    getpid(),
+                    cnt,
+                    &cnt,
+                    cur_sp
+                );
+                uart_write(buf, strlen(buf));
+                for (int i = 0; i < 1000000000; i++)
+                    ;
+                cnt++;
+            }
+        }
+    } else {
+        sprintf(buf, "parent: pid = %d, child pid = %d\n", getpid(), ret);
+        uart_write(buf, strlen(buf));
+        waitpid(ret);
     }
     exit(0);
 }
@@ -69,7 +124,7 @@ void foo() {
 }
 
 void test_thread() {
-    _exec(user_test);
+    _exec(fork_test);
     // for (int i = 0; i < 3; i++) {
     //     thread_create(foo);
     // }

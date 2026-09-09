@@ -79,7 +79,7 @@ trap_restore:
     ld x1, 8*1(sp)
     ld x3, 8*3(sp)
     ld x4, 8*4(sp)
-    ld x5, 8*5(sp)
+    // x5(t0) will be used later, restore finally
     ld x6, 8*6(sp)
     ld x7, 8*7(sp)
     ld x8, 8*8(sp)

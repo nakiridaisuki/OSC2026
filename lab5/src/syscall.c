@@ -31,22 +31,25 @@ long sys_ecall(
 }
 
 static long _uart_read(char *buf, long cnt) {
+    intr_restore(1); // enable intruption for output
     long total = 0;
     printf("[U] ");
     for (size_t i = 0; i < cnt; i++) {
         buf[i] = uart_getchar();
         total++;
     }
+    intr_restore(0); // disable intruption
     return total;
 }
 
 static long _uart_write(const char *buf, long cnt) {
+    intr_restore(1); // enable intruption for output
     long total = 0;
-    printf("[U] ");
     for (size_t i = 0; i < cnt; i++) {
         uart_putchar(buf[i]);
         total++;
     }
+    intr_restore(0); // disable intruption
     return total;
 }
 
@@ -68,6 +71,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
         tf->a0 = thread_fork(tf);
         break;
     case 5: // waitpid(long pid)
+        thread_wait(tf->a0);
         break;
     case 6: // exit(int status)
         thread_exit();
@@ -75,7 +79,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     case 7: // stop(long pid)
         thread_stop(tf->a0);
         break;
-    case 8: // schedule()
+    case 8: // yield()
         thread_schedule();
         break;
     default:

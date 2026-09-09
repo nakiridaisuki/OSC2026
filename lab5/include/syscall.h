@@ -68,7 +68,7 @@ inline static int stop(long pid) {
      */
     return sys_ecall(7, pid, 0, 0, 0, 0, 0, 0);
 }
-inline static int schedule() {
+inline static int yield() {
     /*
      * Schedule to next idle thread.
      */

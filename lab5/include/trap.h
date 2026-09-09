@@ -61,10 +61,11 @@ static inline void intr_restore(uint64_t prev_sie) {
 
 static inline void _cleanup_intr(int *flag) { intr_restore(*flag); }
 
-#define ATOMIC                                                                                   \
-    for (int _flag __attribute__((cleanup(_cleanup_intr))) = intr_save_and_disable(), _done = 0; \
-         !_done;                                                                                 \
-         _done = 1)
+// #define ATOMIC                                                                                   \
+//     for (int _flag __attribute__((cleanup(_cleanup_intr))) = intr_save_and_disable(), _done = 0; \
+//          !_done;                                                                                 \
+//          _done = 1)
+#define ATOMIC ;
 
 void init_trap();
 void trap_handler(TrapFrame *tf);

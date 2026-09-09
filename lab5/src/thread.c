@@ -16,21 +16,29 @@ static ThreadCtx *curr_thd = &_idle_thd;
 static uint8_t _idle_stack[128];
 
 static LinkedListNode *idle_list = &_idle_thd.list;
-static LinkedListNode wait_list;
 static LinkedListNode zonbies_list;
 
-void kill_zombies() {
+static void clean_thread(ThreadCtx *thd) {
+    free(thd->k_stack);
+    if (thd->u_stack)
+        free(thd->u_stack);
+    free(thd);
+}
+static void kill_zombies() {
     while (!lln_empty(&zonbies_list)) {
         LinkedListNode *tmp_n = lln_pop_front(&zonbies_list);
-        ThreadCtx *tmp_ctx    = container_of(tmp_n, ThreadCtx, list);
-        free(tmp_ctx->k_stack);
-        if (tmp_ctx->u_stack)
-            free(tmp_ctx->u_stack);
-        free(tmp_ctx);
+        clean_thread(container_of(tmp_n, ThreadCtx, list));
     }
 }
+static void enter_thd(ThreadCtx *thd) {
+    ThreadCtx *tmp_thd = curr_thd;
+    ATOMIC { curr_thd = thd; }
+    switch_to(tmp_thd, curr_thd);
+}
+
 void idle() {
     while (1) {
+        intr_restore(1);
         kill_zombies();
         thread_schedule();
     }
@@ -43,8 +51,6 @@ void init_thread() {
     _idle_thd.k_stack = _idle_stack;
     _idle_thd.u_stack = NULL;
     lln_init(&_idle_thd.list);
-
-    lln_init(&wait_list);
     lln_init(&zonbies_list);
 }
 
@@ -59,6 +65,7 @@ void thread_create(void (*func)(void)) {
     ctx->u_stack = NULL;
     ctx->tid     = global_tid++;
     lln_init(&ctx->list);
+    lln_init(&ctx->wait_queue);
 
     ATOMIC { lln_push_back(idle_list, &ctx->list); }
 }
@@ -86,6 +93,7 @@ long thread_fork(TrapFrame *tf) {
     new_ctx->u_stack = u_stack;
     new_ctx->tid     = global_tid++;
     lln_init(&new_ctx->list);
+    lln_init(&new_ctx->wait_queue);
 
     ATOMIC { lln_push_back(idle_list, &new_ctx->list); }
     return new_ctx->tid;
@@ -101,7 +109,6 @@ int thread_stop(long tid) {
             if (thd->tid == tid) {
                 lln_remove(tmp);
                 lln_push_back(&zonbies_list, tmp);
-                printf("Thread %ld is stoped.\n", tid);
                 return 0;
             }
             tmp = tmp->next;
@@ -110,30 +117,68 @@ int thread_stop(long tid) {
     return -1;
 }
 
-void thread_exit() {
-    printf("Thread %ld exit.\n", curr_thd->tid);
+long thread_wait(long pid) {
+    LinkedListNode *tmp;
     ATOMIC {
+        tmp = zonbies_list.next;
+        while (tmp != &zonbies_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == pid) {
+                clean_thread(thd);
+                return pid;
+            }
+            tmp = tmp->next;
+        }
+    }
+
+    bool finded = false;
+    ATOMIC {
+        tmp = idle_list->next;
+        while (tmp != idle_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == pid) {
+                lln_push_back(&thd->wait_queue, &curr_thd->list);
+                finded = true;
+                break;
+            }
+            tmp = tmp->next;
+        }
+    }
+
+    if (finded) {
+        enter_thd(&_idle_thd);
+        return pid;
+    }
+    return -1;
+}
+
+void thread_exit() {
+    ATOMIC {
+        LinkedListNode *tmp = curr_thd->wait_queue.next;
+        while (tmp != &curr_thd->wait_queue) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            tmp            = tmp->next;
+            lln_push_back(idle_list, &thd->list);
+        }
         lln_push_back(&zonbies_list, &curr_thd->list);
         curr_thd = &_idle_thd;
-        switch_to(NULL, &_idle_thd);
     }
+    switch_to(NULL, &_idle_thd);
 }
 
 void thread_schedule() {
-    if (lln_empty(idle_list))
-        return;
+    ThreadCtx *next_thd = NULL;
     ATOMIC {
+        if (lln_empty(idle_list))
+            return;
+
         LinkedListNode *next_node;
-        ThreadCtx *next_thd, *tmp_thd;
         next_node = lln_pop_front(idle_list);
         next_thd  = container_of(next_node, ThreadCtx, list);
-        if (curr_thd != &_idle_thd) {
+        if (curr_thd != &_idle_thd)
             lln_push_back(idle_list, &curr_thd->list);
-        }
-        tmp_thd  = curr_thd;
-        curr_thd = next_thd;
-        switch_to(tmp_thd, next_thd);
     }
+    enter_thd(next_thd);
 }
 
 ThreadCtx *get_current() { return curr_thd; }
