@@ -8,6 +8,7 @@
     X(hello, "print hello")                                          \
     X(help, "print this help")                                       \
     X(timeout, "timeout <num> <text>: show <text> after <num> sec.") \
+    X(exec, "exec <path>: execution the binary file in <path>.")     \
     X(info, "print SBI information")
 
 #define X(name, desc) int name(char *args);

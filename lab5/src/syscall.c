@@ -1,6 +1,9 @@
 #include "syscall.h"
+#include "cpio.h"
+#include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
+#include "string.h"
 #include "thread.h"
 #include "trap.h"
 #include "uart.h"
@@ -58,6 +61,21 @@ static long _uart_write(const char *buf, long cnt) {
     return total;
 }
 
+static void _exec(TrapFrame *tf) {
+    CPIOFile file;
+    const char *path = (const char *)tf->a0;
+    if (!cpionewc_find(&file, path)) {
+        printf("ERROR: Can't exec file %s: file not found.", path);
+        return;
+    }
+
+    void *start_addr = malloc(file.header.filesize + 16 * 1024);
+    memcpy(start_addr, file.data, file.header.filesize);
+    memset(tf->regs, 0, sizeof(uintptr_t) * 32);
+    tf->sp   = (uint64_t)start_addr + (file.header.filesize + 16 * 1024);
+    tf->sepc = (uint64_t)start_addr;
+}
+
 static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     tf->sepc += 4;
     long call_id = tf->a7;
@@ -72,6 +90,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
         tf->a0 = _uart_write((const char *)tf->a0, tf->a1);
         break;
     case 3: // exec(const char* path)
+        _exec(tf);
         break;
     case 4: // fork()
         tf->a0 = thread_fork(tf);

@@ -128,6 +128,18 @@ int timeout(char *args) {
     return 0;
 }
 
+int exec(char *args) {
+    char *path = strtok(args, " ");
+
+    if (path == NULL) {
+        uprintf("ERROR: Can't get file name.\n");
+        return 1;
+    }
+
+    sysexec(path);
+    return 0;
+}
+
 int shell() {
     int idx = 0;
     char buf[256];
