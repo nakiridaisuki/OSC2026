@@ -123,12 +123,26 @@ void foo() {
     thread_exit();
 }
 
-void test_thread() {
-    _exec(fork_test);
-    // for (int i = 0; i < 3; i++) {
-    //     thread_create(foo);
-    // }
-    // idle();
+void init() {
+    uint64_t user_sp       = (uint64_t)malloc(4096);
+    get_current()->u_stack = (void *)user_sp;
+    uint64_t kernel_sp;
+    asm volatile("mv %0, sp" : "=r"(kernel_sp));
+
+    uint64_t sstatus;
+    asm volatile("csrr %0, sstatus" : "=r"(sstatus));
+    sstatus &= ~(1UL << 8); // SPP = 0 enter U-mode after sret
+    sstatus |= (1UL << 5);  // SPIE = 1 enable U-mode interrupt
+
+    asm volatile("csrc sstatus, 2\n" // disable interrupt
+                 "csrw sstatus, %0\n"
+                 "csrw sepc, %1\n"
+                 "csrw sscratch, %2\n"
+                 "mv sp, %3\n"
+                 "sret\n"
+                 :
+                 : "r"(sstatus), "r"(shell), "r"(kernel_sp), "r"(user_sp + 4096)
+                 : "memory");
 }
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
@@ -156,12 +170,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_syscall();
     printf("System Call initialized\n");
 
-    // test_thread();
-    // _exec(user_test);
-    thread_create(test_thread);
+    thread_create(init);
     idle();
-
-    shell();
 
     return 0;
 }

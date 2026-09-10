@@ -33,7 +33,6 @@ long sys_ecall(
 static long _uart_read(char *buf, long cnt) {
     intr_restore(1); // enable intruption for output
     long total = 0;
-    printf("[U] ");
     for (size_t i = 0; i < cnt; i++) {
         buf[i] = uart_getchar();
         total++;
@@ -54,6 +53,7 @@ static long _uart_write(const char *buf, long cnt) {
 }
 
 static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
+    tf->sepc += 4;
     long call_id = tf->a7;
     switch (call_id) {
     case 0: // getpid()
@@ -85,7 +85,6 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     default:
         break;
     }
-    tf->sepc += 4;
 }
 
 void init_syscall() { register_exception(8, syscall_hdlr); }

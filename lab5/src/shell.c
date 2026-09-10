@@ -3,8 +3,10 @@
 #include "printf.h"
 #include "sbi.h"
 #include "string.h"
+#include "syscall.h"
 #include "timer.h"
 #include "uart.h"
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -22,25 +24,39 @@ static const shell_cmd_t CMD_TABLE[] = {SHELL_FUNC_LIST};
 enum { SHELL_FUNC_LIST CMD_TABLE_SIZE };
 #undef X
 
+static void uprintf(const char *fmt, ...) {
+    char buf[512];
+
+    va_list args;
+    va_start(args, fmt);
+
+    int len = vsnprintf(buf, sizeof(buf), fmt, args);
+
+    va_end(args);
+
+    if (len > 0)
+        uart_write(buf, len);
+}
+
 int ls(char *args) {
     const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
 
     uint32_t total_files = 0;
     CPIOFile cpio_file   = cpionewc_next_file(&cpio_start_addr);
-    printf("%-10s %-10s\n", "size", "filename");
+    uprintf("%-10s %-10s\n", "size", "filename");
     while (cpio_file.data != NULL) {
-        printf("%-10d %s\n", cpio_file.header.filesize, cpio_file.name);
+        uprintf("%-10d %s\n", cpio_file.header.filesize, cpio_file.name);
         cpio_file = cpionewc_next_file(&cpio_start_addr);
         total_files++;
     }
-    printf("Total %d files.\n", total_files);
+    uprintf("Total %d files.\n", total_files);
     return 0;
 }
 int cat(char *args) {
     char *path = strtok(args, " ");
 
     if (path == NULL) {
-        printf("ERROR: Can't get file name.\n");
+        uprintf("ERROR: Can't get file name.\n");
         return 1;
     }
 
@@ -59,21 +75,21 @@ int cat(char *args) {
         for (size_t i = 0; i < cpio_file.header.filesize; i++)
             uart_putchar(cpio_file.data[i]);
     } else {
-        printf("cat: %s: No such file or directory\n", path);
+        uprintf("cat: %s: No such file or directory\n", path);
         return 1;
     }
     return 0;
 }
 
 int hello(char *args) {
-    printf("Hello World.\n");
+    uprintf("Hello World.\n");
     return 0;
 }
 
 int help(char *args) {
-    printf("Avaliable commands:\n");
+    uprintf("Avaliable commands:\n");
     for (size_t i = 0; i < CMD_TABLE_SIZE; i++) {
-        printf("  %5s - %s.\n", CMD_TABLE[i].name, CMD_TABLE[i].desc);
+        uprintf("  %5s - %s.\n", CMD_TABLE[i].name, CMD_TABLE[i].desc);
     }
     return 0;
 }
@@ -83,10 +99,10 @@ int info(char *args) {
     struct sbiret impl_id  = sbi_get_impl_id();
     struct sbiret impl_ver = sbi_get_impl_version();
 
-    printf("System information:\n");
-    printf("  OpenSBI specification version: 0x%016lx\n", spec_ver.value);
-    printf("  implementation ID: 0x%016lx\n", impl_id.value);
-    printf("  implementation version: 0x%016lx\n", impl_ver.value);
+    uprintf("System information:\n");
+    uprintf("  OpenSBI specification version: 0x%016lx\n", spec_ver.value);
+    uprintf("  implementation ID: 0x%016lx\n", impl_id.value);
+    uprintf("  implementation version: 0x%016lx\n", impl_ver.value);
     check_extensions();
 
     return 0;
@@ -94,7 +110,7 @@ int info(char *args) {
 
 static void _timeout_cb(void *arg) {
     char *str = (char *)arg;
-    printf("%s\n", str);
+    uprintf("%s\n", str);
     free(str);
 }
 
@@ -103,7 +119,7 @@ int timeout(char *args) {
     char *time_s = strtok_r(args, " ", &str);
 
     if (time_s == NULL) {
-        printf("ERROR: Didn't set time.\n");
+        uprintf("ERROR: Didn't set time.\n");
         return 1;
     }
     if (str == NULL)
@@ -116,7 +132,7 @@ int timeout(char *args) {
     Timer *timer     = malloc(sizeof(Timer));
     add_timer(timer, delay_s * 1000, _timeout_cb, buf);
 
-    printf("Timer added\n");
+    uprintf("Timer added\n");
 
     return 0;
 }
@@ -125,25 +141,26 @@ int shell() {
     int idx = 0;
     char buf[256];
     while (1) {
-        printf("opi-rv2> ");
+        uprintf("opi-rv2> ");
         memset(buf, 0, sizeof(buf));
         idx = 0;
 
         while (1) {
-            char c = uart_getchar();
+            char c;
+            uart_read(&c, 1);
 
             if (c == '\r' || c == '\n') {
                 buf[idx] = 0;
-                uart_putchar('\n');
+                uprintf("\n");
                 break;
             } else if (c == 127 || c == '\b') {
                 if (idx > 0) {
                     idx--;
-                    printf("\b \b");
+                    uprintf("\b \b");
                 }
             } else if (idx < 255) {
                 buf[idx++] = c;
-                uart_putchar(c);
+                uprintf("%c", c);
             }
         }
 
@@ -164,9 +181,9 @@ int shell() {
         }
 
         if (!matched && strlen(buf) > 0) {
-            printf("Unknow command: ");
-            printf("%s (%d)", buf, strlen(buf));
-            printf("\n");
+            uprintf("Unknow command: ");
+            uprintf("%s (%d)", buf, strlen(buf));
+            uprintf("\n");
         }
     }
 }

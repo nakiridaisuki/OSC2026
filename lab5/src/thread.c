@@ -87,7 +87,6 @@ long thread_fork(TrapFrame *tf) {
     new_tf->sp         = (uint64_t)(u_stack + 4096 - u_stack_len);
     memcpy((char *)new_tf->sp, (char *)tf->sp, u_stack_len);
     new_tf->a0 = 0;
-    new_tf->sepc += 4;
 
     new_ctx->k_stack = k_stack;
     new_ctx->u_stack = u_stack;
