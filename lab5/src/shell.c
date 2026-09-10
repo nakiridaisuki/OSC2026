@@ -35,6 +35,7 @@ static void uprintf(const char *fmt, ...) {
     va_end(args);
 
     if (len > 0)
+        // printf("%s", buf);
         uart_write(buf, len);
 }
 
@@ -60,20 +61,10 @@ int cat(char *args) {
         return 1;
     }
 
-    const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
-    CPIOFile cpio_file          = cpionewc_next_file(&cpio_start_addr);
-    bool finded                 = false;
-    while (cpio_file.data != NULL) {
-        if (strcmp(path, cpio_file.name) == 0) {
-            finded = true;
-            break;
-        }
-        cpio_file = cpionewc_next_file(&cpio_start_addr);
-    }
-
-    if (finded) {
-        for (size_t i = 0; i < cpio_file.header.filesize; i++)
-            uart_putchar(cpio_file.data[i]);
+    CPIOFile cpio_file;
+    if (cpionewc_find(&cpio_file, path)) {
+        // printf("%s", (char *)cpio_file.data);
+        uart_write((char *)cpio_file.data, cpio_file.header.filesize);
     } else {
         uprintf("cat: %s: No such file or directory\n", path);
         return 1;
@@ -130,7 +121,7 @@ int timeout(char *args) {
 
     uint32_t delay_s = strtou32(time_s, NULL, 10);
     Timer *timer     = malloc(sizeof(Timer));
-    add_timer(timer, delay_s * 1000, _timeout_cb, buf);
+    timer_add(timer, delay_s * 1000, _timeout_cb, buf);
 
     uprintf("Timer added\n");
 
@@ -148,6 +139,7 @@ int shell() {
         while (1) {
             char c;
             uart_read(&c, 1);
+            // c = uart_getchar();
 
             if (c == '\r' || c == '\n') {
                 buf[idx] = 0;

@@ -19,6 +19,8 @@ static uint8_t _idle_stack[128];
 static LinkedListNode *idle_list = &_idle_thd.list;
 static LinkedListNode zombies_list;
 
+static Timer switch_timer;
+
 static void clean_thread(ThreadCtx *thd) {
     free(thd->k_stack);
     if (thd->u_stack)
@@ -32,26 +34,22 @@ static void kill_zombies() {
     }
 }
 
-static void _thd_timer_cb(void *args) { thread_schedule(); }
+static void _thd_timer_cb(void *args) {
+    // printf("Thread %ld timeout.", curr_thd->tid);
+    timer_set(&switch_timer, 1000);
+    thread_schedule();
+}
 static void enter_thd(ThreadCtx *thd) {
     ThreadCtx *tmp_thd = curr_thd;
-    ATOMIC {
-        if (curr_thd != &_idle_thd)
-            lln_remove(&curr_thd->timer.list);
-        curr_thd = thd;
-    }
-    if (thd != &_idle_thd)
-        add_timer(&thd->timer, 1000, _thd_timer_cb, NULL);
+    ATOMIC { curr_thd = thd; }
     switch_to(tmp_thd, curr_thd);
 }
 static void to_zombie(ThreadCtx *thd) {
-    ATOMIC {
-        lln_remove(&thd->timer.list);
-        lln_push_back(&zombies_list, &thd->list);
-    }
+    ATOMIC { lln_push_back(&zombies_list, &thd->list); }
 }
 
 void idle() {
+    timer_set(&switch_timer, 1000);
     while (1) {
         kill_zombies();
         thread_schedule();
@@ -66,6 +64,7 @@ void init_thread() {
     _idle_thd.u_stack = NULL;
     lln_init(&_idle_thd.list);
     lln_init(&zombies_list);
+    timer_add(&switch_timer, -1, _thd_timer_cb, NULL);
 }
 
 void thread_create(void (*func)(void)) {

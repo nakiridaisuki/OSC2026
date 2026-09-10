@@ -35,8 +35,9 @@ typedef struct {
     const uint8_t *data;
 } CPIOFile;
 
-const char *cpionewc_init_from_fdt(const uint8_t *fdt_ptr);
+const char *init_cpionewc(const uint8_t *fdt_ptr);
 CPIONewcHeader cpionewc_read_header(const char *ptr);
 CPIOFile cpionewc_next_file(const char **ptr);
+int cpionewc_find(CPIOFile *file, const char *path);
 
 #endif // !_CPIO_H_

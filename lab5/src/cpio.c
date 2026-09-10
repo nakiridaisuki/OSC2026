@@ -1,5 +1,6 @@
 #include "cpio.h"
 #include "dtb.h"
+#include "printf.h"
 #include "string.h"
 #include "utils.h"
 #include <stdbool.h>
@@ -7,7 +8,7 @@
 phys_addr_t CPIO_START_ADDR = 0;
 phys_addr_t CPIO_END_ADDR   = 0;
 
-const char *cpionewc_init_from_fdt(const uint8_t *fdt_ptr) {
+const char *init_cpionewc(const uint8_t *fdt_ptr) {
     FDTHeader fdt_header          = get_fdt_header(fdt_ptr);
     const uint8_t *dt_struct_ptr  = fdt_ptr + fdt_header.off_dt_struct;
     const uint8_t *dt_strings_ptr = fdt_ptr + fdt_header.off_dt_strings;
@@ -65,4 +66,20 @@ CPIOFile cpionewc_next_file(const char **ptr) {
     }
 
     return result;
+}
+
+int cpionewc_find(CPIOFile *file, const char *path) {
+    const char *cpio_start_addr = (const char *)CPIO_START_ADDR;
+
+    *file      = cpionewc_next_file(&cpio_start_addr);
+    int finded = 0;
+
+    while (file->data != NULL) {
+        if (strcmp(path, file->name) == 0) {
+            finded = 1;
+            break;
+        }
+        *file = cpionewc_next_file(&cpio_start_addr);
+    }
+    return finded;
 }

@@ -115,6 +115,7 @@ void foo() {
 void test() { _exec(user_test); }
 
 void init() {
+    printf("Init program.\n");
     uint64_t user_sp       = (uint64_t)malloc(4096);
     get_current()->u_stack = (void *)user_sp;
     uint64_t kernel_sp;
@@ -137,6 +138,9 @@ void init() {
 }
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
+    init_cpionewc(fdt_ptr);
+    printf("initrd start address: 0x%lx\n", CPIO_START_ADDR);
+
     init_malloc(fdt_ptr);
     printf("Malloc initialized\n");
 
@@ -145,9 +149,6 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
 
     init_plic(fdt_ptr);
     printf("PLIC initialized.\n");
-
-    cpionewc_init_from_fdt(fdt_ptr);
-    printf("initrd start address: 0x%lx\n", CPIO_START_ADDR);
 
     init_uart(fdt_ptr, true);
     printf("UART Initialized.\n");
@@ -161,9 +162,10 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_syscall();
     printf("System Call initialized\n");
 
-    thread_create(init);
     // thread_create(test);
+    thread_create(init);
     idle();
+    // shell();
 
     return 0;
 }

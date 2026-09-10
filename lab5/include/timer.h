@@ -19,6 +19,7 @@ static inline uint64_t __rdtime() {
 }
 
 void init_timer(const uint8_t *fdt);
-void add_timer(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg);
+void timer_add(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg);
+void timer_set(Timer *timer, uint64_t delay_ms);
 
 #endif // !_TIMER_H_

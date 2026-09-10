@@ -44,6 +44,8 @@ static long _uart_read(char *buf, long cnt) {
 
 static long _uart_write(const char *buf, long cnt) {
     intr_restore(1); // enable intruption for output
+    // printf("%s", buf);
+    // return 0;
     long total = 0;
     for (size_t i = 0; i < cnt; i++) {
         if (UART_INIT_DONE)

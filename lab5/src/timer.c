@@ -47,11 +47,41 @@ void init_timer(const uint8_t *fdt_ptr) {
     register_local_intr(5, timer_intr_handler);
 }
 
-void add_timer(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) {
+void timer_add(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) {
     timer->expires  = __rdtime() + delay_ms * HZ_PER_SEC / 1000;
     timer->callback = callback;
     timer->arg      = arg;
     lln_init(&timer->list);
+
+    ATOMIC {
+        Timer *tmp = MAX_TIMER;
+        while (tmp->expires > timer->expires) {
+            if (tmp == &TIMER_LIST_HEAD)
+                break;
+            tmp = NODE_TO_TIMER(tmp->list.next);
+        }
+        lln_add(tmp->list.prev, &timer->list);
+        if (tmp == &TIMER_LIST_HEAD)
+            sbi_set_timer(timer->expires);
+    }
+}
+void timer_set(Timer *timer, uint64_t delay_ms) {
+    ATOMIC {
+        int finded = 0;
+        Timer *tmp = MIN_TIMER;
+        while (tmp != &TIMER_LIST_HEAD) {
+            if (tmp == timer) {
+                finded = 1;
+                break;
+            }
+            tmp = NODE_TO_TIMER(tmp->list.next);
+        }
+        if (finded) {
+            lln_remove(&timer->list);
+        }
+    }
+
+    timer->expires = __rdtime() + delay_ms * HZ_PER_SEC / 1000;
 
     ATOMIC {
         Timer *tmp = MAX_TIMER;

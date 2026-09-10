@@ -14,7 +14,6 @@ typedef struct {
     void *k_stack; // kernel stack base address
     void *u_stack; // user stack base address
     LinkedListNode list, wait_queue;
-    Timer timer;
 } ThreadCtx;
 typedef void (*func_t)(void *);
 
