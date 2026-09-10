@@ -21,7 +21,7 @@ void user_test(void) {
     fork();
     sprintf(buf, "Hi, I am user thread %ld, list %p\n", getpid(), get_current());
     uart_write(buf, strlen(buf));
-    // yield();
+    yield();
 
     sprintf(buf, "thd %ld exit\n", getpid(), get_current()->u_stack);
     uart_write(buf, strlen(buf));
@@ -149,8 +149,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%lx\n", CPIO_START_ADDR);
 
-    // init_uart(fdt_ptr, true);
-    // printf("UART Initialized.\n");
+    init_uart(fdt_ptr, true);
+    printf("UART Initialized.\n");
 
     init_timer(fdt_ptr);
     printf("Timer initialized\n");
@@ -161,8 +161,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_syscall();
     printf("System Call initialized\n");
 
-    // thread_create(init);
-    thread_create(test);
+    thread_create(init);
+    // thread_create(test);
     idle();
 
     return 0;

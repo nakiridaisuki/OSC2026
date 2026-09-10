@@ -17,7 +17,7 @@ static ThreadCtx *curr_thd = &_idle_thd;
 static uint8_t _idle_stack[128];
 
 static LinkedListNode *idle_list = &_idle_thd.list;
-static LinkedListNode zonbies_list;
+static LinkedListNode zombies_list;
 
 static void clean_thread(ThreadCtx *thd) {
     free(thd->k_stack);
@@ -26,21 +26,29 @@ static void clean_thread(ThreadCtx *thd) {
     free(thd);
 }
 static void kill_zombies() {
-    while (!lln_empty(&zonbies_list)) {
-        LinkedListNode *tmp_n = lln_pop_front(&zonbies_list);
+    while (!lln_empty(&zombies_list)) {
+        LinkedListNode *tmp_n = lln_pop_front(&zombies_list);
         clean_thread(container_of(tmp_n, ThreadCtx, list));
     }
 }
 
-static void thd_timer_cb(void *args) {
-    printf("Thread %ld timeout.\n", curr_thd->tid);
-    thread_schedule();
-}
+static void _thd_timer_cb(void *args) { thread_schedule(); }
 static void enter_thd(ThreadCtx *thd) {
     ThreadCtx *tmp_thd = curr_thd;
-    ATOMIC { curr_thd = thd; }
-    add_timer(&thd->timer, 1000, thd_timer_cb, NULL);
+    ATOMIC {
+        if (curr_thd != &_idle_thd)
+            lln_remove(&curr_thd->timer.list);
+        curr_thd = thd;
+    }
+    if (thd != &_idle_thd)
+        add_timer(&thd->timer, 1000, _thd_timer_cb, NULL);
     switch_to(tmp_thd, curr_thd);
+}
+static void to_zombie(ThreadCtx *thd) {
+    ATOMIC {
+        lln_remove(&thd->timer.list);
+        lln_push_back(&zombies_list, &thd->list);
+    }
 }
 
 void idle() {
@@ -57,7 +65,7 @@ void init_thread() {
     _idle_thd.k_stack = _idle_stack;
     _idle_thd.u_stack = NULL;
     lln_init(&_idle_thd.list);
-    lln_init(&zonbies_list);
+    lln_init(&zombies_list);
 }
 
 void thread_create(void (*func)(void)) {
@@ -113,7 +121,7 @@ int thread_stop(long tid) {
             ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
             if (thd->tid == tid) {
                 lln_remove(tmp);
-                lln_push_back(&zonbies_list, tmp);
+                to_zombie(thd);
                 return 0;
             }
             tmp = tmp->next;
@@ -125,8 +133,8 @@ int thread_stop(long tid) {
 long thread_wait(long pid) {
     LinkedListNode *tmp;
     ATOMIC {
-        tmp = zonbies_list.next;
-        while (tmp != &zonbies_list) {
+        tmp = zombies_list.next;
+        while (tmp != &zombies_list) {
             ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
             if (thd->tid == pid) {
                 clean_thread(thd);
@@ -165,7 +173,7 @@ void thread_exit() {
             tmp            = tmp->next;
             lln_push_back(idle_list, &thd->list);
         }
-        lln_push_back(&zonbies_list, &curr_thd->list);
+        to_zombie(curr_thd);
         curr_thd = &_idle_thd;
     }
     switch_to(NULL, &_idle_thd);
