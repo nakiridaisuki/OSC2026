@@ -2,6 +2,7 @@
 #include "malloc.h"
 #include "printf.h"
 #include "sbi.h"
+#include "thread.h"
 #include "types.h"
 #include <stddef.h>
 #include <stdint.h>
@@ -35,7 +36,8 @@ static void default_excep(TrapFrame *tf, uint64_t stval) {
     asm volatile("csrr %0, stval" : "=r"(stval));
     asm volatile("csrr %0, sepc" : "=r"(sepc));
     printf(
-        "[ERROR] Unhandled exception! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n",
+        "[ERROR] Thread %ld Unhandled exception! scause: 0x%lx, sepc: 0x%lx, stval: 0x%lx\n",
+        get_current()->tid,
         scause,
         sepc,
         stval
@@ -116,7 +118,7 @@ void trap_handler(TrapFrame *tf) {
     }
 
     while (1) {
-        if (task_head.next == NULL || task_head.next->priority >= current_priority)
+        if (task_head.next == NULL || task_head.next->priority > current_priority)
             break;
 
         Task *tsk      = task_head.next;

@@ -3,6 +3,7 @@
 #include "malloc.h"
 #include "printf.h"
 #include "string.h"
+#include "timer.h"
 #include "trap.h"
 #include <stdint.h>
 
@@ -30,15 +31,20 @@ static void kill_zombies() {
         clean_thread(container_of(tmp_n, ThreadCtx, list));
     }
 }
+
+static void thd_timer_cb(void *args) {
+    printf("Thread %ld timeout.\n", curr_thd->tid);
+    thread_schedule();
+}
 static void enter_thd(ThreadCtx *thd) {
     ThreadCtx *tmp_thd = curr_thd;
     ATOMIC { curr_thd = thd; }
+    add_timer(&thd->timer, 1000, thd_timer_cb, NULL);
     switch_to(tmp_thd, curr_thd);
 }
 
 void idle() {
     while (1) {
-        intr_restore(1);
         kill_zombies();
         thread_schedule();
     }

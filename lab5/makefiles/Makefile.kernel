@@ -7,7 +7,7 @@ OBJS    := main.o boot.o \
 					 uart.o cpio.o printf.o shell.o \
 					 thread.o thread_switch.o syscall.o
 
-CFLAGS := -march=rv64gc_zbb -O3
+CFLAGS := -march=rv64gc_zbb -O3 -g
 # CFLAGS += -DDEBUG
 
 include ../common/common.mk

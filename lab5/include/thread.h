@@ -2,6 +2,7 @@
 #define _THREAD_H_
 
 #include "dstruc.h"
+#include "timer.h"
 #include "trap.h"
 #include <stdint.h>
 
@@ -13,6 +14,7 @@ typedef struct {
     void *k_stack; // kernel stack base address
     void *u_stack; // user stack base address
     LinkedListNode list, wait_queue;
+    Timer timer;
 } ThreadCtx;
 typedef void (*func_t)(void *);
 

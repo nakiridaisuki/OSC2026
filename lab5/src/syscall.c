@@ -1,5 +1,6 @@
 #include "syscall.h"
 #include "printf.h"
+#include "sbi.h"
 #include "thread.h"
 #include "trap.h"
 #include "uart.h"
@@ -45,7 +46,10 @@ static long _uart_write(const char *buf, long cnt) {
     intr_restore(1); // enable intruption for output
     long total = 0;
     for (size_t i = 0; i < cnt; i++) {
-        uart_putchar(buf[i]);
+        if (UART_INIT_DONE)
+            uart_putchar(buf[i]);
+        else
+            sbi_putchar(buf[i]);
         total++;
     }
     intr_restore(0); // disable intruption

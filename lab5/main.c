@@ -16,32 +16,21 @@
 
 void user_test(void) {
     char buf[256];
-    sprintf(buf, "Hi, I am user thread %ld\n", getpid());
+    fork();
+    fork();
+    fork();
+    sprintf(buf, "Hi, I am user thread %ld, list %p\n", getpid(), get_current());
     uart_write(buf, strlen(buf));
-    sprintf(buf, "Fork now\n");
+    // yield();
+
+    sprintf(buf, "thd %ld exit\n", getpid(), get_current()->u_stack);
     uart_write(buf, strlen(buf));
-    long child_pid = fork();
-    if (child_pid == 0) {
-        sprintf(buf, "child process with pid %ld\n", getpid());
-        uart_write(buf, strlen(buf));
-        yield();
-    } else {
-        fork();
-        sprintf(buf, "parent process with pid %ld\n", getpid());
-        uart_write(buf, strlen(buf));
-        sprintf(buf, "Wait pid %ld\n", child_pid);
-        uart_write(buf, strlen(buf));
-        long wait_res = waitpid(child_pid);
-        sprintf(buf, "Pid %ld finished.\n", wait_res);
-        uart_write(buf, strlen(buf));
+
+    while (1) {
+        // sprintf(buf, "Hi, %ld\n", getpid());
+        // uart_write(buf, strlen(buf));
+        // yield();
     }
-    // if (child_pid == 0) {
-    //     sprintf(buf, "Thread %ld exit.\n", getpid());
-    //     uart_write(buf, strlen(buf));
-    // } else {
-    //     while (1) {
-    //     }
-    // }
     exit(0);
 }
 
@@ -123,6 +112,8 @@ void foo() {
     thread_exit();
 }
 
+void test() { _exec(user_test); }
+
 void init() {
     uint64_t user_sp       = (uint64_t)malloc(4096);
     get_current()->u_stack = (void *)user_sp;
@@ -158,8 +149,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     cpionewc_init_from_fdt(fdt_ptr);
     printf("initrd start address: 0x%lx\n", CPIO_START_ADDR);
 
-    init_uart(fdt_ptr, true);
-    printf("UART Initialized.\n");
+    // init_uart(fdt_ptr, true);
+    // printf("UART Initialized.\n");
 
     init_timer(fdt_ptr);
     printf("Timer initialized\n");
@@ -170,7 +161,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_syscall();
     printf("System Call initialized\n");
 
-    thread_create(init);
+    // thread_create(init);
+    thread_create(test);
     idle();
 
     return 0;

@@ -20,10 +20,8 @@ static void timer_intr_handler(void *context) {
     while (MIN_TIMER != &TIMER_LIST_HEAD && MIN_TIMER->expires <= now) {
         Timer *timer = MIN_TIMER;
         lln_remove(&timer->list);
-
         if (timer->callback)
             trap_add_task(timer->callback, timer->arg, 5);
-        free(timer);
     }
     sbi_set_timer(MIN_TIMER->expires);
 }
