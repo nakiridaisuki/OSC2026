@@ -45,8 +45,16 @@ static void enter_thd(ThreadCtx *thd) {
     ATOMIC { curr_thd = thd; }
     switch_to(tmp_thd, curr_thd);
 }
-static void to_zombie(ThreadCtx *thd) {
-    ATOMIC { lln_push_back(&zombies_list, &thd->list); }
+static void to_zombie(ThreadCtx *target) {
+    ATOMIC {
+        LinkedListNode *tmp = target->wait_queue.next;
+        while (tmp != &target->wait_queue) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            tmp            = tmp->next;
+            lln_push_back(idle_list, &thd->list);
+        }
+        lln_push_back(&zombies_list, &target->list);
+    }
 }
 
 void idle() {
@@ -75,6 +83,7 @@ void init_thread() {
 
     lln_init(&_idle_thd.list);
     lln_init(&zombies_list);
+    lln_init(&sleep_list);
     timer_add(&switch_timer, -1, _thd_timer_cb, NULL);
 }
 
@@ -150,7 +159,6 @@ int thread_stop(long tid) {
             tmp = tmp->next;
         }
     }
-    printf("Can't find process %ld", tid);
     return -1;
 }
 
@@ -204,16 +212,8 @@ int thread_sleep(unsigned int usec) {
 }
 
 void thread_exit() {
-    ATOMIC {
-        LinkedListNode *tmp = curr_thd->wait_queue.next;
-        while (tmp != &curr_thd->wait_queue) {
-            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
-            tmp            = tmp->next;
-            lln_push_back(idle_list, &thd->list);
-        }
-        to_zombie(curr_thd);
-        curr_thd = &_idle_thd;
-    }
+    to_zombie(curr_thd);
+    ATOMIC { curr_thd = &_idle_thd; }
     switch_to(NULL, &_idle_thd);
 }
 

@@ -16,66 +16,62 @@
 
 void user_test(void) {
     char buf[256];
-    fork();
-    fork();
-    fork();
     sprintf(buf, "Hi, I am user thread %ld, list %p\n", getpid(), get_current());
     uart_write(buf, strlen(buf));
-    yield();
 
-    sprintf(buf, "thd %ld exit\n", getpid(), get_current()->u_stack);
+    int cid;
+    if ((cid = fork()) != 0) {
+        sprintf(buf, "Child pid %ld\n", cid);
+        uart_write(buf, strlen(buf));
+
+        int ccid;
+        if ((ccid = fork()) != 0) {
+            sprintf(buf, "wait child %ld\n", cid);
+            uart_write(buf, strlen(buf));
+            waitpid(cid);
+        } else {
+            sprintf(buf, "stop child %ld\n", cid);
+            uart_write(buf, strlen(buf));
+            stop(cid);
+        }
+    } else {
+        while (1) {
+            printf("HI");
+        }
+    }
+    sprintf(buf, "Thread %ld exit\n", getpid());
     uart_write(buf, strlen(buf));
 
-    while (1) {
-        // sprintf(buf, "Hi, %ld\n", getpid());
-        // uart_write(buf, strlen(buf));
-        // yield();
-    }
     exit(0);
 }
 
 void fork_test() {
-    char buf[256];
-    sprintf(buf, "Fork test (pid = %d)\n", getpid());
-    uart_write(buf, strlen(buf));
+    printf("Fork test (pid = %d)\n", getpid());
     int cnt = 1;
     int ret = 0;
     if ((ret = fork()) == 0) {
         long cur_sp;
         asm volatile("mv %0, sp" : "=r"(cur_sp));
-        sprintf(
-            buf, "child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp
-        );
-        uart_write(buf, strlen(buf));
+        printf("child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp);
         cnt++;
 
         if ((ret = fork()) != 0) {
             asm volatile("mv %0, sp" : "=r"(cur_sp));
-            sprintf(
-                buf, "child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp
-            );
-            uart_write(buf, strlen(buf));
+            printf("child1: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp);
             waitpid(ret);
         } else {
             while (cnt < 5) {
                 asm volatile("mv %0, sp" : "=r"(cur_sp));
-                sprintf(
-                    buf,
-                    "child2: pid = %d, cnt = %d, &cnt = %p, sp = %p\n",
-                    getpid(),
-                    cnt,
-                    &cnt,
-                    cur_sp
+                printf(
+                    "child2: pid = %d, cnt = %d, &cnt = %p, sp = %p\n", getpid(), cnt, &cnt, cur_sp
                 );
-                uart_write(buf, strlen(buf));
                 for (int i = 0; i < 1000000000; i++)
                     ;
                 cnt++;
             }
         }
     } else {
-        sprintf(buf, "parent: pid = %d, child pid = %d\n", getpid(), ret);
-        uart_write(buf, strlen(buf));
+        printf("parent: pid = %d, child pid = %d\n", getpid(), ret);
         waitpid(ret);
     }
     exit(0);
@@ -112,12 +108,7 @@ void foo() {
     thread_exit();
 }
 
-void test() {
-    printf("Hi, i am thread %ld\n", get_current()->tid);
-    thread_sleep(1000000);
-    printf("Thread %ld back now\n", get_current()->tid);
-    thread_exit();
-}
+void test() { _exec(fork_test); }
 
 void init() {
     printf("Init program.\n");
@@ -173,8 +164,6 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     video_init();
     printf("Video initialized\n");
 
-    // test_screen_color();
-    //
     // thread_create(test);
     thread_create(init);
     idle();

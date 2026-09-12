@@ -84,10 +84,9 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     tf->sepc += 4;
     long call_id = tf->a7;
 
-    if (call_id != 1 && call_id != 2 && call_id != 8 && call_id != 9) {
-
-        printf("Syscall %ld\n", call_id);
-    }
+    // if (call_id == 2) {
+    //     printf("Syscall %ld\n", call_id);
+    // }
 
     switch (call_id) {
     case 0: // getpid()
@@ -112,8 +111,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
         thread_exit();
         break;
     case 7: // stop(long pid)
-        printf("Stop %ld\n", tf->a0);
-        thread_stop(tf->a0);
+        tf->a0 = thread_stop(tf->a0);
         break;
     case 8: // display(unsigned int *bmp_image, unsigned int width, unsigned int height)
         video_bmp_display((unsigned int *)tf->a0, tf->a1, tf->a2);

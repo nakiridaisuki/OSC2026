@@ -1,7 +1,6 @@
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
 
-#include "printf.h"
 #include <stdint.h>
 
 long sys_ecall(
@@ -49,7 +48,6 @@ inline static long fork() {
      * Duplicate current process.
      * Return child's pid to parent, 0 to child.
      */
-    printf("Fork\n");
     return sys_ecall(4, 0, 0, 0, 0, 0, 0, 0);
 }
 inline static long waitpid(long pid) {
