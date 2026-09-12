@@ -9,6 +9,7 @@
     X(help, help, "print this help")                                          \
     X(timeout, timeout, "timeout <num> <text>: show <text> after <num> sec.") \
     X(shexec, exec, "exec <path>: execution the binary file in <path>.")      \
+    X(sleep, sleep, "sleep <usec>: sleep <usec> microseconds.")               \
     X(info, info, "print SBI information")
 
 #define X(func, name, desc) int func(char *args);

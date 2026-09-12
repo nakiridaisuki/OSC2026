@@ -1,9 +1,10 @@
-/* QEMU ramfb driver implementation */
+/* Video driver implementation for QEMU & Orange Pi RV2 */
 
 #include <stdint.h>
 
-extern int strncmp(const char *s1, const char *s2, int n);
 extern void *memcpy(void *dst, const void *src, int n);
+
+#ifdef DBG_QEMU
 
 #define FB_BASE   0x87000000
 #define FB_WIDTH  1920
@@ -26,9 +27,9 @@ struct QEMU_PACKED RAMFBCfg {
 };
 
 #define FW_CFG_BASE   0x10100000UL
-#define FW_CFG_SELECT (uint16_t *)(FW_CFG_BASE + 0x08)
-#define FW_CFG_DATA   (uint64_t *)(FW_CFG_BASE + 0x00)
-#define FW_CFG_DMA    (uint64_t *)(FW_CFG_BASE + 0x10)
+#define FW_CFG_SELECT ((volatile uint16_t *)(FW_CFG_BASE + 0x08))
+#define FW_CFG_DATA   ((volatile uint64_t *)(FW_CFG_BASE + 0x00))
+#define FW_CFG_DMA    ((volatile uint64_t *)(FW_CFG_BASE + 0x10))
 
 #define FW_CFG_DMA_CTL_ERROR  0x01
 #define FW_CFG_DMA_CTL_READ   0x02
@@ -45,16 +46,14 @@ struct QEMU_PACKED FWCfgFile {
     char name[56];
 };
 
-struct QEMU_PACKED FWCfgFiles {
-    uint32_t count;
-    struct FWCfgFile f[];
-};
-
 struct QEMU_PACKED FWCfgDmaAccess {
     uint32_t control;
     uint32_t length;
     uint64_t address;
 };
+
+static void fw_cfg_dma_transfer(void *address, uint32_t length, uint32_t control);
+static void flush_dcache(void *addr, unsigned long len);
 
 static void fw_cfg_dma_transfer(void *address, uint32_t length, uint32_t control) {
     volatile struct FWCfgDmaAccess access = {
@@ -62,9 +61,23 @@ static void fw_cfg_dma_transfer(void *address, uint32_t length, uint32_t control
         .length  = bswap32(length),
         .address = bswap64((uint64_t)address),
     };
+
+    if (address && length > 0) {
+        flush_dcache((void *)address, length);
+    }
+    flush_dcache((void *)&access, sizeof(access));
+
+    __asm__ __volatile__("" ::: "memory");
+
     *FW_CFG_DMA = bswap64((uint64_t)&access);
+
     while (bswap32(access.control) & ~FW_CFG_DMA_CTL_ERROR)
         ;
+
+    if (address && length > 0) {
+        flush_dcache((void *)address, length);
+    }
+    flush_dcache((void *)&access, sizeof(access));
 }
 
 static void fw_cfg_read_entry(void *buf, int e, int len) {
@@ -81,24 +94,45 @@ static int fw_cfg_find_file(const char *name) {
     uint32_t count = 0;
     fw_cfg_read_entry(&count, FW_CFG_FILE_DIR, sizeof(count));
     count = bswap32(count);
+
     for (int i = 0; i < count; i++) {
         struct FWCfgFile file;
         fw_cfg_dma_transfer(&file, sizeof(file), FW_CFG_DMA_CTL_READ);
-        if (strncmp(name, file.name, sizeof(file.name)) == 0)
+
+        int match = 1;
+        int j     = 0;
+        while (name[j] != '\0') {
+            if (name[j] != file.name[j]) {
+                match = 0;
+                break;
+            }
+            j++;
+        }
+        if (match && file.name[j] == '\0') {
             return bswap16(file.select);
+        }
     }
     return -1;
 }
 
+#else
+
+#define FB_BASE   0x7f700000
+#define FB_WIDTH  1920
+#define FB_HEIGHT 1080
+#define FB_BPP    4
+
+#endif
+
 #define CACHE_BLOCK_SIZE 64
-#define cbo_flush(start)                            \
-    ({                                              \
-        unsigned long __v = (unsigned long)(start); \
-        __asm__ __volatile__("cbo.flush"            \
-                             " 0(%0)"               \
-                             :                      \
-                             : "rK"(__v)            \
-                             : "memory");           \
+
+#define cbo_flush(start)                \
+    ({                                  \
+        asm volatile("mv a0, %0\n\t"    \
+                     ".word 0x0025200F" \
+                     :                  \
+                     : "r"(start)       \
+                     : "memory", "a0"); \
     })
 
 static void flush_dcache(void *addr, unsigned long len) {
@@ -111,6 +145,7 @@ static void flush_dcache(void *addr, unsigned long len) {
 }
 
 void video_init() {
+#ifdef DBG_QEMU
     struct RAMFBCfg cfg = {
         .addr   = bswap64(FB_BASE),
         .fourcc = bswap32(XRGB8888),
@@ -120,15 +155,27 @@ void video_init() {
         .stride = bswap32(FB_WIDTH * FB_BPP),
     };
     fw_cfg_write_entry(&cfg, fw_cfg_find_file("etc/ramfb"), sizeof(struct RAMFBCfg));
+#else
+    return;
+#endif
 }
 
 void video_bmp_display(unsigned int *bmp_image, int width, int height) {
     unsigned int *fb = (unsigned int *)FB_BASE;
     int start_x      = (FB_WIDTH - width) / 2;
     int start_y      = (FB_HEIGHT - height) / 2;
+
     for (int y = 0; y < height; y++) {
         void *dst = fb + (start_y + y) * FB_WIDTH + start_x;
         memcpy(dst, bmp_image + y * width, width * sizeof(unsigned int));
         flush_dcache(dst, width * sizeof(unsigned int));
     }
+}
+
+void test_screen_color() {
+    unsigned int *fb = (unsigned int *)FB_BASE;
+    for (int i = 0; i < FB_WIDTH * FB_HEIGHT; i++) {
+        fb[i] = 0x00FF0000;
+    }
+    flush_dcache(fb, FB_WIDTH * FB_HEIGHT * sizeof(unsigned int));
 }

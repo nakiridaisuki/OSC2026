@@ -19,7 +19,7 @@ static ThreadCtx *curr_thd = &_idle_thd;
 static uint8_t _idle_stack[128];
 
 static LinkedListNode *idle_list = &_idle_thd.list;
-static LinkedListNode zombies_list;
+static LinkedListNode zombies_list, sleep_list;
 
 static Timer switch_timer;
 
@@ -38,7 +38,6 @@ static void kill_zombies() {
 
 static void _thd_timer_cb(void *args) {
     // printf("Thread %ld timeout.", curr_thd->tid);
-    timer_set(&switch_timer, EXPIRE);
     thread_schedule();
 }
 static void enter_thd(ThreadCtx *thd) {
@@ -54,16 +53,26 @@ void idle() {
     timer_set(&switch_timer, EXPIRE);
     while (1) {
         kill_zombies();
+
+        if (lln_empty(idle_list)) {
+            intr_restore(1);
+            asm volatile("wfi");
+            intr_restore(0);
+        }
+
         thread_schedule();
     }
 }
 
 void init_thread() {
-    _idle_thd.ra = (uintptr_t)idle;
-    _idle_thd.sp = (uintptr_t)_idle_stack + sizeof(_idle_stack);
+    _idle_thd.tid = 0;
+    _idle_thd.ra  = (uintptr_t)idle;
+    _idle_thd.sp  = (uintptr_t)_idle_stack + sizeof(_idle_stack);
     memset(_idle_thd.sx, 0, sizeof(_idle_thd.sx));
     _idle_thd.k_stack = _idle_stack;
     _idle_thd.u_stack = NULL;
+    _idle_thd.stat    = AVAIL;
+
     lln_init(&_idle_thd.list);
     lln_init(&zombies_list);
     timer_add(&switch_timer, -1, _thd_timer_cb, NULL);
@@ -79,6 +88,7 @@ void thread_create(void (*func)(void)) {
     ctx->k_stack = th_stack;
     ctx->u_stack = NULL;
     ctx->tid     = global_tid++;
+    ctx->stat    = AVAIL;
     lln_init(&ctx->list);
     lln_init(&ctx->wait_queue);
 
@@ -97,15 +107,17 @@ long thread_fork(TrapFrame *tf) {
 
     // Handle user stack
     // copy full user stack and update necessery value in trap frame of new thread
-    char *u_stack      = (char *)malloc(4096);
-    size_t u_stack_len = (char *)curr_thd->u_stack + 4096 - (char *)tf->sp;
-    new_tf->sp         = (uint64_t)(u_stack + 4096 - u_stack_len);
+    size_t STACK_SIZE  = (1024 * 16);
+    char *u_stack      = (char *)malloc(STACK_SIZE);
+    size_t u_stack_len = (char *)curr_thd->u_stack + STACK_SIZE - (char *)tf->sp;
+    new_tf->sp         = (uint64_t)(u_stack + STACK_SIZE - u_stack_len);
     memcpy((char *)new_tf->sp, (char *)tf->sp, u_stack_len);
     new_tf->a0 = 0;
 
     new_ctx->k_stack = k_stack;
     new_ctx->u_stack = u_stack;
     new_ctx->tid     = global_tid++;
+    new_ctx->stat    = AVAIL;
     lln_init(&new_ctx->list);
     lln_init(&new_ctx->wait_queue);
 
@@ -127,7 +139,18 @@ int thread_stop(long tid) {
             }
             tmp = tmp->next;
         }
+
+        tmp = sleep_list.next;
+        while (tmp != &sleep_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == tid) {
+                thd->stat = KILLED;
+                return 0;
+            }
+            tmp = tmp->next;
+        }
     }
+    printf("Can't find process %ld", tid);
     return -1;
 }
 
@@ -166,6 +189,20 @@ long thread_wait(long pid) {
     return -1;
 }
 
+static void _thd_sleep_cb(void *args) {
+    ThreadCtx *sleep_thd = (ThreadCtx *)args;
+    ATOMIC { lln_remove(&sleep_thd->list); }
+    if (sleep_thd->stat == KILLED)
+        thread_exit();
+    ATOMIC { lln_push_back(idle_list, &sleep_thd->list); }
+}
+int thread_sleep(unsigned int usec) {
+    timer_add_us(&curr_thd->timer, usec, _thd_sleep_cb, curr_thd);
+    ATOMIC { lln_push_back(&sleep_list, &curr_thd->list); }
+    enter_thd(&_idle_thd);
+    return 0;
+}
+
 void thread_exit() {
     ATOMIC {
         LinkedListNode *tmp = curr_thd->wait_queue.next;
@@ -181,6 +218,7 @@ void thread_exit() {
 }
 
 void thread_schedule() {
+    timer_set(&switch_timer, EXPIRE);
     ThreadCtx *next_thd = NULL;
     ATOMIC {
         if (lln_empty(idle_list))

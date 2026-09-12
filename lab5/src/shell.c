@@ -145,6 +145,15 @@ int shexec(char *args) {
     return 0;
 }
 
+int sleep(char *args) {
+    char *usec_s  = strtok(args, " ");
+    uint32_t usec = strtou32(usec_s, NULL, 10);
+    uprintf("Sleep %d usecs\n", usec);
+    usleep(usec);
+    uprintf("Back\n");
+    return 0;
+}
+
 int shell() {
     int idx = 0;
     char buf[256];

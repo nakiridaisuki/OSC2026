@@ -1,6 +1,9 @@
 #ifndef _SYSCALL_H_
 #define _SYSCALL_H_
 
+#include "printf.h"
+#include <stdint.h>
+
 long sys_ecall(
     unsigned long num,
     unsigned long arg0,
@@ -46,6 +49,7 @@ inline static long fork() {
      * Duplicate current process.
      * Return child's pid to parent, 0 to child.
      */
+    printf("Fork\n");
     return sys_ecall(4, 0, 0, 0, 0, 0, 0, 0);
 }
 inline static long waitpid(long pid) {
@@ -68,11 +72,23 @@ inline static int stop(long pid) {
      */
     return sys_ecall(7, pid, 0, 0, 0, 0, 0, 0);
 }
+inline static int display(unsigned int *bmp_image, unsigned int width, unsigned int height) {
+    /*
+     * Schedule to next idle thread.
+     */
+    return sys_ecall(8, (uint64_t)bmp_image, width, height, 0, 0, 0, 0);
+}
+inline static int usleep(unsigned int usec) {
+    /*
+     * Schedule to next idle thread.
+     */
+    return sys_ecall(9, usec, 0, 0, 0, 0, 0, 0);
+}
 inline static int yield() {
     /*
      * Schedule to next idle thread.
      */
-    return sys_ecall(8, 0, 0, 0, 0, 0, 0, 0);
+    return sys_ecall(10, 0, 0, 0, 0, 0, 0, 0);
 }
 
 #endif // !_SYSCALL_H_

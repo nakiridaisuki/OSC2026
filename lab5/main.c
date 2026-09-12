@@ -112,7 +112,12 @@ void foo() {
     thread_exit();
 }
 
-void test() { _exec(user_test); }
+void test() {
+    printf("Hi, i am thread %ld\n", get_current()->tid);
+    thread_sleep(1000000);
+    printf("Thread %ld back now\n", get_current()->tid);
+    thread_exit();
+}
 
 void init() {
     printf("Init program.\n");
@@ -138,6 +143,7 @@ void init() {
 }
 
 extern void video_init();
+extern void test_screen_color();
 
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_cpionewc(fdt_ptr);
@@ -167,6 +173,8 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     video_init();
     printf("Video initialized\n");
 
+    // test_screen_color();
+    //
     // thread_create(test);
     thread_create(init);
     idle();

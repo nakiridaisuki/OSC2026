@@ -47,8 +47,8 @@ void init_timer(const uint8_t *fdt_ptr) {
     register_local_intr(5, timer_intr_handler);
 }
 
-void timer_add(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) {
-    timer->expires  = __rdtime() + delay_ms * HZ_PER_SEC / 1000;
+void timer_add_us(Timer *timer, uint64_t delay_us, callback_t callback, void *arg) {
+    timer->expires  = __rdtime() + delay_us * HZ_PER_SEC / 1000000;
     timer->callback = callback;
     timer->arg      = arg;
     lln_init(&timer->list);
@@ -65,10 +65,11 @@ void timer_add(Timer *timer, uint64_t delay_ms, callback_t callback, void *arg) 
             sbi_set_timer(timer->expires);
     }
 }
-void timer_set(Timer *timer, uint64_t delay_ms) {
+
+void timer_set_us(Timer *timer, uint64_t delay_us) {
     ATOMIC {
         int finded = 0;
-        Timer *tmp = MIN_TIMER;
+        Timer *tmp = MAX_TIMER;
         while (tmp != &TIMER_LIST_HEAD) {
             if (tmp == timer) {
                 finded = 1;
@@ -81,7 +82,7 @@ void timer_set(Timer *timer, uint64_t delay_ms) {
         }
     }
 
-    timer->expires = __rdtime() + delay_ms * HZ_PER_SEC / 1000;
+    timer->expires = __rdtime() + delay_us * HZ_PER_SEC / 1000000;
 
     ATOMIC {
         Timer *tmp = MAX_TIMER;

@@ -4,6 +4,8 @@ LINKER  := linkers/linker.$(TARGET).ld
 
 include ./makefiles/Makefile.kernel
 
+CFLAGS += -DDBG_QEMU
+
 run: $(OBJ_DIR)/$(TARGET).elf
 	cd rootfs && find . | cpio -o -H newc > ../$(OBJ_DIR)/initramfs.cpio
-	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf  -initrd $(OBJ_DIR)/initramfs.cpio -device ramfb -serial mon:stdio
+	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf  -initrd $(OBJ_DIR)/initramfs.cpio -device ramfb -serial mon:stdio -display gtk
