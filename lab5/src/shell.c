@@ -16,11 +16,11 @@ typedef struct {
     const char *desc;
 } shell_cmd_t;
 
-#define X(name, desc) {#name, name, desc},
+#define X(func, name, desc) {#name, func, desc},
 static const shell_cmd_t CMD_TABLE[] = {SHELL_FUNC_LIST};
 #undef X
 
-#define X(name, desc) CMD_##name,
+#define X(func, name, desc) CMD_##name,
 enum { SHELL_FUNC_LIST CMD_TABLE_SIZE };
 #undef X
 
@@ -128,7 +128,7 @@ int timeout(char *args) {
     return 0;
 }
 
-int exec(char *args) {
+int shexec(char *args) {
     char *path = strtok(args, " ");
 
     if (path == NULL) {
@@ -136,7 +136,12 @@ int exec(char *args) {
         return 1;
     }
 
-    sysexec(path);
+    long cpid;
+    if ((cpid = fork()) == 0) {
+        exec(path);
+    } else {
+        waitpid(cpid);
+    }
     return 0;
 }
 

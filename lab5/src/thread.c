@@ -7,6 +7,8 @@
 #include "trap.h"
 #include <stdint.h>
 
+#define EXPIRE (1000 / 32)
+
 extern int switch_to(ThreadCtx *prev, ThreadCtx *next);
 extern int trap_restore();
 
@@ -36,7 +38,7 @@ static void kill_zombies() {
 
 static void _thd_timer_cb(void *args) {
     // printf("Thread %ld timeout.", curr_thd->tid);
-    timer_set(&switch_timer, 1000);
+    timer_set(&switch_timer, EXPIRE);
     thread_schedule();
 }
 static void enter_thd(ThreadCtx *thd) {
@@ -49,7 +51,7 @@ static void to_zombie(ThreadCtx *thd) {
 }
 
 void idle() {
-    timer_set(&switch_timer, 1000);
+    timer_set(&switch_timer, EXPIRE);
     while (1) {
         kill_zombies();
         thread_schedule();

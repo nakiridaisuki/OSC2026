@@ -34,7 +34,7 @@ inline static long uart_write(const char *buf, long count) {
      */
     return sys_ecall(2, (long)buf, count, 0, 0, 0, 0, 0);
 }
-inline static int sysexec(const char *path) {
+inline static int exec(const char *path) {
     /*
      * Load and exec program in path.
      * Return 0 on success, -1 on failure.

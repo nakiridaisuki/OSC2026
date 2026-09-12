@@ -137,6 +137,8 @@ void init() {
                  : "memory");
 }
 
+extern void video_init();
+
 int main(unsigned long hartid, const uint8_t *fdt_ptr) {
     init_cpionewc(fdt_ptr);
     printf("initrd start address: 0x%lx\n", CPIO_START_ADDR);
@@ -161,6 +163,9 @@ int main(unsigned long hartid, const uint8_t *fdt_ptr) {
 
     init_syscall();
     printf("System Call initialized\n");
+
+    video_init();
+    printf("Video initialized\n");
 
     // thread_create(test);
     thread_create(init);
