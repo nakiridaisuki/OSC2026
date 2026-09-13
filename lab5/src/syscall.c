@@ -35,18 +35,15 @@ long sys_ecall(
 }
 
 static long _uart_read(char *buf, long cnt) {
-    intr_restore(1); // enable intruption for output
     long total = 0;
     for (size_t i = 0; i < cnt; i++) {
         buf[i] = uart_getchar();
         total++;
     }
-    intr_restore(0); // disable intruption
     return total;
 }
 
 static long _uart_write(const char *buf, long cnt) {
-    intr_restore(1); // enable intruption for output
     // printf("%s", buf);
     // return 0;
     long total = 0;
@@ -57,7 +54,7 @@ static long _uart_write(const char *buf, long cnt) {
             sbi_putchar(buf[i]);
         total++;
     }
-    intr_restore(0); // disable intruption
+    // thread_sleep(1000);
     return total;
 }
 
@@ -69,13 +66,18 @@ static void _exec(TrapFrame *tf) {
         return;
     }
 
-    void *start_addr = malloc(file.header.filesize + 16 * 1024);
+    const int STACK_SIZE = 16 * 1024;
+    void *start_addr     = malloc(file.header.filesize + STACK_SIZE);
     memcpy(start_addr, file.data, file.header.filesize);
     memset(tf->regs, 0, sizeof(uintptr_t) * 32);
-    tf->sp   = (uint64_t)start_addr + (file.header.filesize + 16 * 1024);
+    tf->sp   = (uint64_t)start_addr + (file.header.filesize + STACK_SIZE);
     tf->sepc = (uint64_t)start_addr;
 
-    get_current()->u_stack = (void *)tf->sp;
+    ThreadCtx *curr_thd = get_current();
+    free(curr_thd->u_space);
+    curr_thd->sp      = tf->sp;
+    curr_thd->u_space = start_addr;
+    curr_thd->u_len   = file.header.filesize + STACK_SIZE;
 }
 
 extern void video_bmp_display(unsigned int *bmp_image, int width, int height);
@@ -88,6 +90,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     //     printf("Syscall %ld\n", call_id);
     // }
 
+    intr_restore(1); // enable intruption for output
     switch (call_id) {
     case 0: // getpid()
         tf->a0 = get_current()->tid;
@@ -119,12 +122,19 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     case 9: // usleep(unsigned int usec)
         thread_sleep(tf->a0);
         break;
-    case 10: // yield()
+    case 10: // signal(int signum, void (*handler)())
+        break;
+    case 11: // sigreturn()
+        break;
+    case 12: // kill(int pid, int signum)
+        break;
+    case 13: // yield()
         thread_schedule();
         break;
     default:
         break;
     }
+    intr_restore(0); // disable intruption
 }
 
 void init_syscall() { register_exception(8, syscall_hdlr); }

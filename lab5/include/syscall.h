@@ -71,22 +71,38 @@ inline static int stop(long pid) {
     return sys_ecall(7, pid, 0, 0, 0, 0, 0, 0);
 }
 inline static int display(unsigned int *bmp_image, unsigned int width, unsigned int height) {
-    /*
-     * Schedule to next idle thread.
-     */
     return sys_ecall(8, (uint64_t)bmp_image, width, height, 0, 0, 0, 0);
 }
 inline static int usleep(unsigned int usec) {
     /*
-     * Schedule to next idle thread.
+     * Sleep <usec> microseconds.
      */
     return sys_ecall(9, usec, 0, 0, 0, 0, 0, 0);
+}
+inline static long signal(int signum, void (*handler)()) {
+    /*
+     * Register a user-space handler for a given signal
+     * Return the previous handler of the signal
+     */
+    return sys_ecall(10, signum, (uint64_t)handler, 0, 0, 0, 0, 0);
+}
+inline static void sigreturn() {
+    /*
+     *
+     */
+    sys_ecall(11, 0, 0, 0, 0, 0, 0, 0);
+}
+inline static int kill(int pid, int signum) {
+    /*
+     * Send a signal to process with pid
+     */
+    return sys_ecall(12, pid, signum, 0, 0, 0, 0, 0);
 }
 inline static int yield() {
     /*
      * Schedule to next idle thread.
      */
-    return sys_ecall(10, 0, 0, 0, 0, 0, 0, 0);
+    return sys_ecall(13, 0, 0, 0, 0, 0, 0, 0);
 }
 
 #endif // !_SYSCALL_H_

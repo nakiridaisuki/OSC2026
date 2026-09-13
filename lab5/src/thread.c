@@ -12,8 +12,7 @@
 extern int switch_to(ThreadCtx *prev, ThreadCtx *next);
 extern int trap_restore();
 
-static long global_tid = 1;
-
+static long global_tid = 0;
 static ThreadCtx _idle_thd;
 static ThreadCtx *curr_thd = &_idle_thd;
 static uint8_t _idle_stack[128];
@@ -24,9 +23,10 @@ static LinkedListNode zombies_list, sleep_list;
 static Timer switch_timer;
 
 static void clean_thread(ThreadCtx *thd) {
-    free(thd->k_stack);
-    if (thd->u_stack)
-        free(thd->u_stack);
+    if (thd->k_stack)
+        free(thd->k_stack);
+    if (thd->u_space)
+        free(thd->u_space);
     free(thd);
 }
 static void kill_zombies() {
@@ -56,32 +56,35 @@ static void to_zombie(ThreadCtx *target) {
         lln_push_back(&zombies_list, &target->list);
     }
 }
+static void _init_thd(ThreadCtx *ctx, void *k_stack, void *u_space, uint64_t u_len) {
+    ctx->k_stack = k_stack;
+    ctx->u_space = u_space;
+    ctx->u_len   = u_len;
+    ctx->tid     = global_tid++;
+    ctx->stat    = AVAIL;
+    lln_init(&ctx->list);
+    lln_init(&ctx->wait_queue);
+}
 
 void idle() {
     timer_set(&switch_timer, EXPIRE);
     while (1) {
         kill_zombies();
-
         if (lln_empty(idle_list)) {
             intr_restore(1);
             asm volatile("wfi");
             intr_restore(0);
         }
-
         thread_schedule();
     }
 }
 
 void init_thread() {
-    _idle_thd.tid = 0;
-    _idle_thd.ra  = (uintptr_t)idle;
-    _idle_thd.sp  = (uintptr_t)_idle_stack + sizeof(_idle_stack);
+    _idle_thd.ra = (uintptr_t)idle;
+    _idle_thd.sp = (uintptr_t)_idle_stack + sizeof(_idle_stack);
     memset(_idle_thd.sx, 0, sizeof(_idle_thd.sx));
-    _idle_thd.k_stack = _idle_stack;
-    _idle_thd.u_stack = NULL;
-    _idle_thd.stat    = AVAIL;
+    _init_thd(&_idle_thd, NULL, NULL, 0);
 
-    lln_init(&_idle_thd.list);
     lln_init(&zombies_list);
     lln_init(&sleep_list);
     timer_add(&switch_timer, -1, _thd_timer_cb, NULL);
@@ -94,45 +97,35 @@ void thread_create(void (*func)(void)) {
     ctx->ra = (uintptr_t)func;
     ctx->sp = (uintptr_t)th_stack + 4096;
     memset(ctx->sx, 0, sizeof(ctx->sx));
-    ctx->k_stack = th_stack;
-    ctx->u_stack = NULL;
-    ctx->tid     = global_tid++;
-    ctx->stat    = AVAIL;
-    lln_init(&ctx->list);
-    lln_init(&ctx->wait_queue);
-
+    _init_thd(ctx, th_stack, NULL, 0);
     ATOMIC { lln_push_back(idle_list, &ctx->list); }
 }
+
 long thread_fork(TrapFrame *tf) {
     ThreadCtx *new_ctx = (ThreadCtx *)malloc(sizeof(ThreadCtx));
 
     // Handle kernel stack
     // put trap frame to the kernel stack of new thread
     void *k_stack = malloc(4096);
-    new_ctx->ra   = (uintptr_t)trap_restore; // TODO fix it
+    new_ctx->ra   = (uintptr_t)trap_restore;
     new_ctx->sp   = (uint64_t)k_stack + 4096 - sizeof(TrapFrame);
     memcpy((char *)new_ctx->sp, tf, sizeof(TrapFrame));
     TrapFrame *new_tf = (TrapFrame *)new_ctx->sp;
 
-    // Handle user stack
-    // copy full user stack and update necessery value in trap frame of new thread
-    size_t STACK_SIZE  = (1024 * 16);
-    char *u_stack      = (char *)malloc(STACK_SIZE);
-    size_t u_stack_len = (char *)curr_thd->u_stack + STACK_SIZE - (char *)tf->sp;
-    new_tf->sp         = (uint64_t)(u_stack + STACK_SIZE - u_stack_len);
-    memcpy((char *)new_tf->sp, (char *)tf->sp, u_stack_len);
+    // Handle user memory space
+    // copy full user memory and update necessery value in trap frame of new thread
+    size_t u_len       = curr_thd->u_len;
+    size_t u_stack_len = (char *)curr_thd->u_space + u_len - (char *)tf->sp;
+    char *new_u_space  = malloc(u_len);
+    memcpy(new_u_space, curr_thd->u_space, u_len);
+    new_tf->sp = (uint64_t)(new_u_space + u_len - u_stack_len);
     new_tf->a0 = 0;
 
-    new_ctx->k_stack = k_stack;
-    new_ctx->u_stack = u_stack;
-    new_ctx->tid     = global_tid++;
-    new_ctx->stat    = AVAIL;
-    lln_init(&new_ctx->list);
-    lln_init(&new_ctx->wait_queue);
-
+    _init_thd(new_ctx, k_stack, new_u_space, u_len);
     ATOMIC { lln_push_back(idle_list, &new_ctx->list); }
     return new_ctx->tid;
 }
+
 int thread_stop(long tid) {
     if (tid == curr_thd->tid)
         thread_exit();
@@ -218,6 +211,7 @@ void thread_exit() {
 }
 
 void thread_schedule() {
+    printf("Schedule\n");
     timer_set(&switch_timer, EXPIRE);
     ThreadCtx *next_thd = NULL;
     ATOMIC {

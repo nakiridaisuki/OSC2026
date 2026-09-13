@@ -79,7 +79,8 @@ void fork_test() {
 
 void _exec(void (*func)(void)) {
     uint64_t user_sp       = (uint64_t)malloc(4096);
-    get_current()->u_stack = (void *)user_sp;
+    get_current()->u_space = (void *)user_sp;
+    get_current()->u_len   = 4096;
     uint64_t kernel_sp;
     asm volatile("mv %0, sp" : "=r"(kernel_sp));
 
@@ -113,7 +114,8 @@ void test() { _exec(fork_test); }
 void init() {
     printf("Init program.\n");
     uint64_t user_sp       = (uint64_t)malloc(4096);
-    get_current()->u_stack = (void *)user_sp;
+    get_current()->u_space = (void *)user_sp;
+    get_current()->u_len   = 4096;
     uint64_t kernel_sp;
     asm volatile("mv %0, sp" : "=r"(kernel_sp));
 

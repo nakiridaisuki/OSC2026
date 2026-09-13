@@ -13,8 +13,9 @@ typedef struct {
     uintptr_t sp;     // stack pointer
     uintptr_t sx[12]; // save pointers
     uint64_t tid;
-    void *k_stack; // kernel stack base address
-    void *u_stack; // user stack base address
+    void *k_stack;  // kernel stack base address
+    void *u_space;  // user space base address
+    uint64_t u_len; // user space len
     LinkedListNode list, wait_queue;
     Timer timer;
     ThreadStat stat;
