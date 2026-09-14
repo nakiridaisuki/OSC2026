@@ -54,7 +54,6 @@ static long _uart_write(const char *buf, long cnt) {
             sbi_putchar(buf[i]);
         total++;
     }
-    // thread_sleep(1000);
     return total;
 }
 
@@ -70,6 +69,7 @@ static void _exec(TrapFrame *tf) {
     void *start_addr     = malloc(file.header.filesize + STACK_SIZE);
     memcpy(start_addr, file.data, file.header.filesize);
     memset(tf->regs, 0, sizeof(uintptr_t) * 32);
+    memset(start_addr + file.header.filesize, 0, STACK_SIZE);
     tf->sp   = (uint64_t)start_addr + (file.header.filesize + STACK_SIZE);
     tf->sepc = (uint64_t)start_addr;
 

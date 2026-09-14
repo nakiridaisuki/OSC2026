@@ -335,8 +335,6 @@ void *malloc(uint64_t bytes) {
         else
             ptr = palloc(bytes);
     }
-    Page *page = _mem2page((uint8_t *)ptr);
-    memset(ptr, 0, PAGE_SIZE * (1 << page->order));
     return ptr;
 }
 

@@ -93,6 +93,7 @@ void init_thread() {
 void thread_create(void (*func)(void)) {
     ThreadCtx *ctx = (ThreadCtx *)malloc(sizeof(ThreadCtx));
     void *th_stack = malloc(4096);
+    memset(th_stack, 0, 4096);
 
     ctx->ra = (uintptr_t)func;
     ctx->sp = (uintptr_t)th_stack + 4096;
@@ -211,7 +212,6 @@ void thread_exit() {
 }
 
 void thread_schedule() {
-    printf("Schedule\n");
     timer_set(&switch_timer, EXPIRE);
     ThreadCtx *next_thd = NULL;
     ATOMIC {

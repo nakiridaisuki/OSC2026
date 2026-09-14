@@ -4,6 +4,7 @@
 #include "sbi.h"
 #include "string.h"
 #include "syscall.h"
+#include "thread.h"
 #include "timer.h"
 #include "uart.h"
 #include <stdarg.h>

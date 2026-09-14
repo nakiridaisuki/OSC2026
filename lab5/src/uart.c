@@ -3,6 +3,7 @@
 #include "dtb.h"
 #include "plic.h"
 #include "string.h"
+#include "trap.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -200,17 +201,25 @@ void init_uart(const uint8_t *fdt_ptr, const bool enable_fifo) {
 }
 
 void uart_putchar(char c) {
-    while (ring_buf_full(&tx_ring_buf))
-        asm volatile("wfi");
-
-    if (c == '\n') {
-        ring_buf_push('\r', &tx_ring_buf);
-        set_reg(UART_IER, 2); // enable transmit intr
-        while (ring_buf_full(&tx_ring_buf))
+    ATOMIC {
+        while (ring_buf_full(&tx_ring_buf)) {
+            intr_restore(1);
             asm volatile("wfi");
+        }
+        intr_restore(0);
+
+        if (c == '\n') {
+            ring_buf_push('\r', &tx_ring_buf);
+            set_reg(UART_IER, 2); // enable transmit intr
+            while (ring_buf_full(&tx_ring_buf)) {
+                intr_restore(1);
+                asm volatile("wfi");
+            }
+            intr_restore(0);
+        }
+        ring_buf_push(c, &tx_ring_buf);
+        set_reg(UART_IER, 2); // enable transmit intr
     }
-    ring_buf_push(c, &tx_ring_buf);
-    set_reg(UART_IER, 2); // enable transmit intr
 }
 
 char uart_getchar() {
