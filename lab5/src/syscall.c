@@ -8,6 +8,8 @@
 #include "trap.h"
 #include "uart.h"
 
+extern void sigret_trampoline();
+
 long sys_ecall(
     unsigned long num,
     unsigned long arg0,
@@ -82,6 +84,66 @@ static void _exec(TrapFrame *tf) {
 
 extern void video_bmp_display(unsigned int *bmp_image, int width, int height);
 
+static uint64_t sys_signal(int signum, uint64_t hdlr_addr) {
+    if (signum < 0 || signum >= MAX_SIGNAL)
+        return -1;
+    get_current()->signal_hdlr[signum] = hdlr_addr;
+    return 0;
+}
+
+static uint64_t sys_kill(long pid, int signum) {
+    ThreadCtx *thd = get_thd(pid);
+    printf("Killed thd %p\n", thd);
+    if (thd == NULL || signum < 0 || signum >= MAX_SIGNAL)
+        return -1;
+
+    ATOMIC { thd->pending_signal |= (1 << signum); }
+    return 0;
+}
+
+static void sys_sigret(TrapFrame *tf) {
+    ThreadCtx *curr_thd = get_current();
+    printf("Signal handler completed. sigreturn called.\n");
+
+    *tf = curr_thd->saved_tf;
+
+    if (curr_thd->signal_stack != NULL) {
+        free(curr_thd->signal_stack);
+        curr_thd->signal_stack = NULL;
+    }
+    curr_thd->in_signal_hdlr = 0;
+}
+
+static void handle_signals(TrapFrame *tf) {
+    ThreadCtx *curr = get_current();
+
+    if (curr->pending_signal == 0 || curr->in_signal_hdlr)
+        return;
+
+    int signum = -1;
+    for (int i = 0; i < MAX_SIGNAL; i++) {
+        if (curr->pending_signal & (1 << i)) {
+            signum = i;
+            curr->pending_signal ^= (1 << i);
+            break;
+        }
+    }
+
+    uint64_t hdlr = curr->signal_hdlr[signum];
+
+    if (hdlr == 0) {
+        thread_exit();
+    } else {
+        curr->saved_tf       = *tf;
+        curr->in_signal_hdlr = 1;
+        curr->signal_stack   = malloc(4096);
+
+        tf->sepc = hdlr;
+        tf->sp   = (uint64_t)(curr->signal_stack + 4096);
+        tf->ra   = (uint64_t)sigret_trampoline;
+    }
+}
+
 static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     tf->sepc += 4;
     long call_id = tf->a7;
@@ -123,10 +185,15 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
         thread_sleep(tf->a0);
         break;
     case 10: // signal(int signum, void (*handler)())
+        tf->a0 = sys_signal(tf->a0, tf->a1);
         break;
     case 11: // sigreturn()
+        sys_sigret(tf);
         break;
     case 12: // kill(int pid, int signum)
+        printf("Syscall kill %ld from %ld call %d\n", tf->a0, get_current()->tid, tf->a1);
+        tf->a0 = sys_kill(tf->a0, tf->a1);
+        printf("sys kill return %ld\n", tf->a0);
         break;
     case 13: // yield()
         thread_schedule();
@@ -134,6 +201,9 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
     default:
         break;
     }
+
+    handle_signals(tf);
+
     intr_restore(0); // disable intruption
 }
 

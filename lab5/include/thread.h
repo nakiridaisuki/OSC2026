@@ -8,6 +8,8 @@
 
 typedef enum { AVAIL, KILLED } ThreadStat;
 
+#define MAX_SIGNAL 32
+
 typedef struct {
     uintptr_t ra;     // return address
     uintptr_t sp;     // stack pointer
@@ -19,6 +21,14 @@ typedef struct {
     LinkedListNode list, wait_queue;
     Timer timer;
     ThreadStat stat;
+
+    // signal handler
+    uint64_t signal_hdlr[MAX_SIGNAL];
+    uint32_t pending_signal;
+    int in_signal_hdlr;
+    TrapFrame saved_tf;
+    void *signal_stack;
+
 } ThreadCtx;
 typedef void (*func_t)(void *);
 
@@ -32,5 +42,6 @@ int thread_sleep(unsigned int usec);
 void thread_exit();
 void thread_schedule();
 
+ThreadCtx *get_thd(long pid);
 ThreadCtx *get_current();
 #endif // !_THREAD_H_

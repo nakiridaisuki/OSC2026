@@ -35,3 +35,9 @@ switch_to:
 
     move tp, a1
     ret
+
+.globl sigret_trampoline
+
+sigret_trampoline:
+    li a7, 11   
+    ecall      

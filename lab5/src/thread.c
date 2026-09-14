@@ -62,6 +62,11 @@ static void _init_thd(ThreadCtx *ctx, void *k_stack, void *u_space, uint64_t u_l
     ctx->u_len   = u_len;
     ctx->tid     = global_tid++;
     ctx->stat    = AVAIL;
+
+    ctx->pending_signal = 0;
+    ctx->in_signal_hdlr = 0;
+    ctx->signal_stack   = NULL;
+
     lln_init(&ctx->list);
     lln_init(&ctx->wait_queue);
 }
@@ -92,6 +97,7 @@ void init_thread() {
 
 void thread_create(void (*func)(void)) {
     ThreadCtx *ctx = (ThreadCtx *)malloc(sizeof(ThreadCtx));
+    memset(ctx, 0, sizeof(ThreadCtx));
     void *th_stack = malloc(4096);
     memset(th_stack, 0, 4096);
 
@@ -104,6 +110,7 @@ void thread_create(void (*func)(void)) {
 
 long thread_fork(TrapFrame *tf) {
     ThreadCtx *new_ctx = (ThreadCtx *)malloc(sizeof(ThreadCtx));
+    memset(new_ctx, 0, sizeof(ThreadCtx));
 
     // Handle kernel stack
     // put trap frame to the kernel stack of new thread
@@ -121,6 +128,9 @@ long thread_fork(TrapFrame *tf) {
     memcpy(new_u_space, curr_thd->u_space, u_len);
     new_tf->sp = (uint64_t)(new_u_space + u_len - u_stack_len);
     new_tf->a0 = 0;
+
+    for (int i = 0; i < MAX_SIGNAL; i++)
+        new_ctx->signal_hdlr[i] = curr_thd->signal_hdlr[i];
 
     _init_thd(new_ctx, k_stack, new_u_space, u_len);
     ATOMIC { lln_push_back(idle_list, &new_ctx->list); }
@@ -228,3 +238,41 @@ void thread_schedule() {
 }
 
 ThreadCtx *get_current() { return curr_thd; }
+
+ThreadCtx *get_thd(long pid) {
+    ATOMIC {
+        LinkedListNode *tmp = idle_list->next;
+        while (tmp != idle_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == pid)
+                return thd;
+
+            LinkedListNode *ttmp = thd->wait_queue.next;
+            while (ttmp != &thd->wait_queue) {
+                ThreadCtx *tthd = container_of(ttmp, ThreadCtx, list);
+                if (tthd->tid == pid)
+                    return tthd;
+                ttmp = ttmp->next;
+            }
+
+            tmp = tmp->next;
+        }
+
+        tmp = zombies_list.next;
+        while (tmp != &zombies_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == pid)
+                return thd;
+            tmp = tmp->next;
+        }
+
+        tmp = sleep_list.next;
+        while (tmp != &sleep_list) {
+            ThreadCtx *thd = container_of(tmp, ThreadCtx, list);
+            if (thd->tid == pid)
+                return thd;
+            tmp = tmp->next;
+        }
+    }
+    return NULL;
+}
