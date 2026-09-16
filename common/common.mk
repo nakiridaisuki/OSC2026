@@ -14,7 +14,7 @@ OBJ_DIR    ?= ./build
 DTB        := $(COMMON_DIR)/$(DTB_NAME)
 ITS        := $(COMMON_DIR)/kernel.its
 
-CFLAGS  += -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude
+CFLAGS  += -Wall -mcmodel=medany -ffreestanding -nostdlib -Iinclude -MMD -MP
 LDFLAGS := -T $(LINKER)
 
 vpath %.c . src
@@ -22,6 +22,9 @@ vpath %.S . src
 vpath %.s . src
 
 REAL_OBJS := $(addprefix $(OBJ_DIR)/, $(OBJS))
+DEPS      := $(REAL_OBJS:.o=.d)
+
+.PHONY: all clean run
 
 all: $(TARGET).fit
 
@@ -43,14 +46,17 @@ $(OBJ_DIR)/$(TARGET).elf: $(REAL_OBJS) $(LINKER) | $(OBJ_DIR)
 $(OBJ_DIR)/kernel.bin: $(OBJ_DIR)/$(TARGET).elf | $(OBJ_DIR)
 	$(OBJCOPY) -O binary $< $@
 
-$(TARGET).fit: $(OBJ_DIR)/kernel.bin
-	cd rootfs && find . | cpio -o -H newc > ../$(OBJ_DIR)/initramfs.cpio
+$(OBJ_DIR)/initramfs.cpio: | $(OBJ_DIR)
+	cd rootfs && find . | cpio -o -H newc > ../$@
+
+$(TARGET).fit: $(OBJ_DIR)/kernel.bin $(OBJ_DIR)/initramfs.cpio
 	$(MKIMAGE) -f $(ITS) -D "-i $(COMMON_DIR) -i $(OBJ_DIR)" $@
 
 clean:
 	rm -rf $(OBJ_DIR)
 	rm *.fit
 
-run: $(OBJ_DIR)/$(TARGET).elf
-	cd rootfs && find . | cpio -o -H newc > ../$(OBJ_DIR)/initramfs.cpio
+run: $(OBJ_DIR)/$(TARGET).elf $(OBJ_DIR)/initramfs.cpio
 	qemu-system-riscv64 -M virt -kernel $(OBJ_DIR)/$(TARGET).elf -nographic -initrd $(OBJ_DIR)/initramfs.cpio
+
+-include $(DEPS)

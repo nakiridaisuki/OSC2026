@@ -1,232 +1,121 @@
-# Lab 4
+# Lab 5
 
-In this lab, we need to handle exception and interrupt.
+In this lab, we will implement the thread.
 
-## Exception
+*I won't distinguish between threads and processes in this lab, so I may use both words.*
 
-We can't let a random user program touch our system, so all system operation should be done by *operation system*.
-If a user program needs some system functions, it needs to use "system call" to ask the OS for help.
-To notify the OS, it will raise an *exception*, and the OS will handle this exception.
-We can then add some parameters into the exceptions to represent different system calls.
+## Thread
 
-The `ecall` (environment call) instruction can cause an exception, and a higher level process will handle it.
-For example, we know there are three different permission levels in RISC-V.
-When a program run under U-mode, the `ecall` will be cached by S-mode.
+The thread/process is a running entity of a program in the memory.
+Basically, a process should run under user mode, and switch to kernel mode via system call if needed.
+The stander workflow to create a new process and run some program is `fork` current process and `exec` the target program.
+
+```
+[current proc] <U-mode>
+       | fork
+[current proc] <K-mode>
+       | create a new process
+       |______________________
+       |                      |
+[current proc] <K-mode>   [new proc] <K-mode>
+       | sret                 | sret
+  keep do something       [new proc] <U-mode>
+                              | exec
+                          [new proc] <K-mode>
+                              | kernel load program
+                              | sret
+                          [target program] <U-mode>
+
+// U-mode for user mode
+// K-mode for kernel mode
+```
+
+To control a thread, we need to maintain some necessary information of it.
+A user process need a memory area for program code, so we need to allocate for it.
+Also, we need a stack for kernel mode.
 
 ```txt
-+--------------------------+
-|    U-mode (User mode)    |
-+--------------------------+
-   | ecall          ^ sret
-   | (Syscall)      |
-   v                |
-+--------------------------+
-| S-mode (Supervisor mode) |
-+--------------------------+
-   | ecall          ^ mret
-   | (SBI call)     |
-   v                |
-+--------------------------+
-|   M-mode (Machine mode)  |
-+--------------------------+
+Process Control Block:
+kernel stack 
+user program space
 ```
 
-Under S-mode, after handling the system call, we can use `sret` (S-mode return) instruction to return to U-mode program.
-
-## Interrupt
-
-Interrupt is a mechanism that allows the hardware tell the OS something happen.
-When a interrupt happened, the hardware will call a function we set automatically, then the OS can handle this events.
-
-## Trap handling
-
-Both `ecall` and interrupt will enter the same handling function called *trap handler*.
-
-We have said that the hardware will call this function automatically,
-so we need to configure it during initialization our trap handling system.
-The hardware will jump to the address set in `stvec` register. so we save the handler function address into it.
-
-In trap handler, we have to do following things:
-
-1. Save context
-2. Handle trap
-3. Restore context and return
-
-### Save Context
-
-What is context?\
-Context is the register data in the CPU when a program is running and other necessary registers.
-In RISC-V, we have `x1 ~ x31` 31 registers in the CPU.
-
-To return the correct address after trap handling, we also need to store the address when trap happened.
-This address is saved in `sepc` (supervisor exception program counter) by hardware automatically.
-
-The processor state and permission status also need to keep the same after return from trap handler.
-Those data is stored in `sstatus` register.
-
-So, our context for trap handler is `x1 ~ x31`, `sepc` and `sstatus`.
-We need to save the value in this registers into the stack before calling the trap handling function.
-
-### Handle Trap
-
-In the trap handler, we can use `scause` to identify what exception or interrupt happened.
-According to the RISC-V ISC manual, here is the definition of `scuase`:
-
-Interrupts:
-
-| Interrupt | Exception Code | Description |
-| :---: | :---: | :--- |
-| 1 | 0 | *Reserved* |
-| 1 | 1 | Supervisor software interrupt |
-| 1 | 2-4 | *Reserved* |
-| 1 | 5 | Supervisor timer interrupt |
-| 1 | 6-8 | *Reserved* |
-| 1 | 9 | Supervisor external interrupt |
-| 1 | 10-12 | *Reserved* |
-| 1 | 13 | Counter-overflow interrupt |
-| 1 | 14-15 | *Reserved* |
-| 1 | ≥16 | *Designated for platform use* |
-
-Exceptions:
-
-| Interrupt | Exception Code | Description |
-| :---: | :---: | :--- |
-| 0 | 0 | Instruction address misaligned |
-| 0 | 1 | Instruction access fault |
-| 0 | 2 | Illegal instruction |
-| 0 | 3 | Breakpoint |
-| 0 | 4 | Load address misaligned |
-| 0 | 5 | Load access fault |
-| 0 | 6 | Store/AMO address misaligned |
-| 0 | 7 | Store/AMO access fault |
-| 0 | 8 | Environment call from U-mode |
-| 0 | 9 | Environment call from S-mode |
-| 0 | 10-11 | *Reserved* |
-| 0 | 12 | Instruction page fault |
-| 0 | 13 | Load page fault |
-| 0 | 14 | *Reserved* |
-| 0 | 15 | Store/AMO page fault |
-| 0 | 16-17 | *Reserved* |
-| 0 | 18 | Software check |
-| 0 | 19 | Hardware error |
-| 0 | 20-23 | *Reserved* |
-| 0 | 24-31 | *Designated for custom use* |
-| 0 | 32-47 | *Reserved* |
-| 0 | 48-63 | *Designated for custom use* |
-| 0 | ≥64 | *Reserved* |
-
-We can handle every trap we need in trap handler like this:
-
-```c
-if (scause & (1ULL << 63)) { // interrupt
-    scause ^= (1ULL << 63);
-    if (scause == 1){
-        //...
-    } else if (scause == 5){
-        //...
-    } else if (scause == 9){
-        //...
-    }
-    // ...
-} else { // exception
-    if (scause == 1){
-        //...
-    } else if (scause == 2){
-        //...
-    } else if (scause == 3){
-        //...
-    }
-    // ...
-}
-```
-
-But, implement all handling logic in trap handler clearly not a good idea.
-To decouple it, I design a handler register. We will talk about it later.
-
-### Restore Context and Return
-
-After handling the trap, we need to restore the context we saved before and use `sret` to return.
-
-When an interrupt happened, the hardware will disable the global interrupt automatically before entering our trap handler.
-The `sret` instruction will open the global interrupt and jump to the address stored in `sepc`.
-
-## Trap Handler Design
-
-In my design (also Linux or other OS), trap handler is just a dispatcher, it don't contain any handling logic.
-Each handler is implemented by each component and register with trap handler during initialization.
-When a trap happened, trap handler call the function pointer in the register table.
-
-```c
-typedef void (*intr_handler_t)(void *context);
-typedef void (*excep_handler_t)(TrapFrame *tf, uint64_t stval);
-
-intr_handler_t local_intr_table[MAX_LOCAL_INTR];
-excep_handler_t exception_table[MAX_EXCEPTIONS];
-
-void register_local_intr(uint32_t code, intr_handler_t handler) {
-    local_intr_table[code] = handler;
-}
-void register_exception(uint32_t code, excep_handler_t handler) {
-    exception_table[code] = handler;
-}
-
-
-void trap_handler(TrapFrame *tf) {
-    // ...
-
-    if (scause & (1ULL << 63)) { // interrupt
-        scause ^= (1ULL << 63);
-        local_intr_table[scause](NULL);
-    } else { // exception
-        exception_table[scause](tf, stval);
-    }
-
-    // ...
-}
-```
-
-Voilà, the trap handler is so clean.
-
-For an external interrupt, the PLIC component use the same design to handle interruption.
-
-This is the overall design graph:
+and we need some saved data for context switch, like:
 
 ```txt
-                               +------------------------------+
-                               |         Trap Handler         |
-                               | (Entry Point / reads scause) |
-                               +--------------+---------------+
-                                              |
-                   +--------------------------+--------------------------+
-                   |                                                     |
-             [ Interrupts ]                                       [ Exceptions ]
-       (Asynchronous, scause MSB = 1)                       (Synchronous, scause MSB = 0)
-                   |                                                     |
-     +-------------v-------------+                         +-------------v-------------+
-     |     Interrupt Dispatch    |                         |     Exception Dispatch    |
-     | (Calls saved func pointer)|                         | (Calls saved func pointer)|
-     +-------------+-------------+                         +-------------+-------------+
-                   |                                                     |
-       +-----------+-----------+                                         |
-       |                       |                                         v
-[ scause == 9 ]         [ Other scause ]                     +-------------------------+
-       |                       |                             |   Registered Exception  |
-       v                       v                             |        Handlers         |
-+-------------+      +-------------------+                   +-------------------------+
-| PLIC Handler|      |  Other Registered |                   | - Page Fault            |
-|             |      | Interrupt Handlers|                   | - Illegal Instruction   |
-+------+------+      | (Timer, Software) |                   | - Environment Call      |
-       |             +-------------------+                   |   (ecall), etc.         |
-       |                                                     +-------------------------+
-       | (Uses PLIC's internal
-       |  device registry)
-       v
-+-------------+
-|  Registered |
-| Ext Devices |
-+-------------+
-| - UART      |
-| - VirtIO    |
-| - Mouse/Kbd |
-+-------------+
+Process Control Block:
+...
+ra: return address
+sp: stack pointer
+s[0~11]: saved registers
 ```
+
+and some other control data like timer or signal handler.
+
+```txt
+Process Control Block:
+...
+linked list node
+timer
+signal control block
+```
+
+This data structure is called *Process control block* commonly, or PCB for short.
+
+## Scheduler
+
+Our kernel should be able to schedule between multiple threads.
+
+```txt
+[thd 1 working] --for some reason--> [schedule] --thread switch--> [thd 2 working]
+```
+
+When thread 1 be scheduled back, we hope it keep doing what it did before scheduled.
+The term 'keep doing' here in program execution means to run the next instruction.
+
+To schedule between threads, we can use the `ra`(return address) register to achieve it.
+
+When the process meet a `ret` instruction, it will change current `pc` to the value in `ra`.
+We can write a function for thread switching using this mechanism.
+When we call this function, the `ra` will be set to next line of it by the `call` instruction.
+In this switching function, we set `ra` to target thread's saved `ra` and call `ret`.
+Then our `pc` will at the desired position of target process.
+
+Thus, the switch function should like this:
+
+```asm
+.globl switch_to
+
+switch_to:
+    sd ra, 8*0(a0) // save current ra
+    sd sp, 8*1(a0)
+    sd s0, 8*2(a0)
+    ...
+    sd s11, 8*13(a0)
+
+    ld ra, 8*0(a1) // load target ra
+    ld sp, 8*1(a1)
+    ld s0, 8*2(a1)
+    ...
+    ld s11, 8*13(a1)
+
+    move tp, a1
+    ret // jump to target ra
+```
+
+Above things are run under *kernel mode*.
+
+## Idle Thread
+
+When there are no thread in ready queue, we need a always runnable thread for CPU to execute next instruction.
+Also, the idle thread can be a schedule center.
+When a thread exit, it can switch to the idle thread, and it will keep schedule for next ready thread.
+
+## System Calls
+
+After knowing how to switch between processes, we need to figure out how to switch between *user* processes.
+
+The scheduling is happened under kernel mode,
+and the `fork`, `exec` and other functions offered by kernel is also run under kernel mode.
+So we need the `ecall` instruction which introduced in Lab 4 to switch from user mode to kernel mode.
+This `ecall`'s argument can be defined by us, and we call *system call* for this types of function calls.

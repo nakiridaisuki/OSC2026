@@ -93,7 +93,6 @@ static uint64_t sys_signal(int signum, uint64_t hdlr_addr) {
 
 static uint64_t sys_kill(long pid, int signum) {
     ThreadCtx *thd = get_thd(pid);
-    printf("Killed thd %p\n", thd);
     if (thd == NULL || signum < 0 || signum >= MAX_SIGNAL)
         return -1;
 
@@ -191,9 +190,7 @@ static void syscall_hdlr(TrapFrame *tf, uint64_t stval) {
         sys_sigret(tf);
         break;
     case 12: // kill(int pid, int signum)
-        printf("Syscall kill %ld from %ld call %d\n", tf->a0, get_current()->tid, tf->a1);
         tf->a0 = sys_kill(tf->a0, tf->a1);
-        printf("sys kill return %ld\n", tf->a0);
         break;
     case 13: // yield()
         thread_schedule();
