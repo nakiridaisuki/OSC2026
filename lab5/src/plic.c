@@ -2,12 +2,22 @@
 #include "dtb.h"
 #include "printf.h"
 #include "trap.h"
+#include <stdbool.h>
 #include <stddef.h>
 
 static phys_addr_t PLIC_BASE;
 #define PLIC_PRIO_BASE   PLIC_BASE
 #define PLIC_ENABLE_BASE (PLIC_BASE + 0x2000)
 #define PLIC_CTX_BASE    (PLIC_BASE + 0x200000)
+
+static bool plic_init_done = false;
+static void check_init() {
+    if (!plic_init_done) {
+        printf("ERROR: PLIC uninitialized\n");
+        while (1) {
+        }
+    }
+}
 
 #define PLIC_SET_PRIO(irq_id, val) \
     (*(volatile uint32_t *)(PLIC_PRIO_BASE + irq_id * 4) = (uint32_t)val)
@@ -44,6 +54,7 @@ static void plic_intr_handler(void *context) {
 }
 
 void plic_register(uint32_t irq, irq_handler_t handler, void *context) {
+    check_init();
     irq_table[irq].handler = handler;
     irq_table[irq].context = context;
 }
@@ -63,9 +74,12 @@ void init_plic(const uint8_t *fdt_ptr) {
 
     PLIC_SET_PRIO_THLD(1, 0);
     register_local_intr(9, plic_intr_handler);
+
+    plic_init_done = true;
 }
 
 void plic_enable(uint32_t irq, uint8_t priority) {
+    check_init();
     PLIC_SET_PRIO(irq, priority);
     PLIC_ENABLE(1, irq);
 }

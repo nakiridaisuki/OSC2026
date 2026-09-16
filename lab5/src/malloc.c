@@ -2,6 +2,7 @@
 #include "cpio.h"
 #include "dstruc.h"
 #include "dtb.h"
+#include "printf.h"
 #include "string.h"
 #include "trap.h"
 #include "types.h"
@@ -314,6 +315,11 @@ void init_malloc(const uint8_t *fdt_ptr) {
     early_mem_ptr = ALIGN_UP(early_mem_ptr, PAGE_SIZE);
     _lock_mem((phys_addr_t)_start, early_mem_ptr - (phys_addr_t)_start);
     _lock_mem((phys_addr_t)fdt_ptr, fdt_header.totalsize);
+    if (CPIO_START_ADDR == 0 || CPIO_END_ADDR == 0) {
+        printf("ERROR: cpio address wrong.\nstart: %p\nend: %p\n", CPIO_START_ADDR, CPIO_END_ADDR);
+        while (1) {
+        }
+    }
     _lock_mem(CPIO_START_ADDR, CPIO_END_ADDR - CPIO_START_ADDR);
 
     for (size_t i = 0; i < total_zones; i++) {

@@ -3,6 +3,7 @@
 #include "printf.h"
 #include "sbi.h"
 #include "types.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -13,6 +14,15 @@ extern void trap_entry(void);
 static intr_handler_t local_intr_table[MAX_LOCAL_INTR];
 static excep_handler_t exception_table[MAX_EXCEPTIONS];
 static int current_priority = 999;
+static bool trap_init_done  = false;
+
+static void check_init() {
+    if (!trap_init_done) {
+        printf("ERROR: Trap uninitialized\n");
+        while (1) {
+        }
+    }
+}
 
 static void default_intr(void *context) {
     uint64_t scause, stval, sepc;
@@ -65,10 +75,12 @@ void trap_add_task(callback_t callback, void *args, int priority) {
 }
 
 void register_local_intr(uint32_t code, intr_handler_t handler) {
+    check_init();
     if (code < MAX_LOCAL_INTR)
         local_intr_table[code] = handler;
 }
 void register_exception(uint32_t code, excep_handler_t handler) {
+    check_init();
     if (code < MAX_EXCEPTIONS)
         exception_table[code] = handler;
 }
@@ -94,6 +106,8 @@ void init_trap() {
         local_intr_table[i] = default_intr;
     for (size_t i = 0; i < MAX_EXCEPTIONS; i++)
         exception_table[i] = default_excep;
+
+    trap_init_done = true;
 }
 
 void trap_handler(TrapFrame *tf) {

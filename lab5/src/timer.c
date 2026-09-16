@@ -6,6 +6,7 @@
 #include "sbi.h"
 #include "trap.h"
 #include "types.h"
+#include <stdbool.h>
 #include <stdint.h>
 
 #define NODE_TO_TIMER(nodeptr) container_of(nodeptr, Timer, list)
@@ -14,6 +15,14 @@
 
 static uint64_t HZ_PER_SEC;
 static Timer TIMER_LIST_HEAD;
+static bool timer_init_done = false;
+static void check_init() {
+    if (!timer_init_done) {
+        printf("ERROR: PLIC uninitialized\n");
+        while (1) {
+        }
+    }
+}
 
 static void timer_intr_handler(void *context) {
     uint64_t now = __rdtime();
@@ -45,9 +54,12 @@ void init_timer(const uint8_t *fdt_ptr) {
     TIMER_LIST_HEAD.callback = TIMER_LIST_HEAD.arg = NULL;
     lln_init(&TIMER_LIST_HEAD.list);
     register_local_intr(5, timer_intr_handler);
+
+    timer_init_done = true;
 }
 
 void timer_add_us(Timer *timer, uint64_t delay_us, callback_t callback, void *arg) {
+    check_init();
     timer->expires  = __rdtime() + delay_us * HZ_PER_SEC / 1000000;
     timer->callback = callback;
     timer->arg      = arg;
@@ -67,6 +79,7 @@ void timer_add_us(Timer *timer, uint64_t delay_us, callback_t callback, void *ar
 }
 
 void timer_set_us(Timer *timer, uint64_t delay_us) {
+    check_init();
     ATOMIC {
         int finded = 0;
         Timer *tmp = MAX_TIMER;
